@@ -22,6 +22,27 @@ global degPitMin is 40.
 global degPitTrg is 0.
 global degYawTrg is 0.
 
+// Dynamic pressure thresholds
+global kpaMeso is 0.5.
+
+// PID controllers
+global pidPit is pidLoop(1.5, 0.1, 3).
+set pidPit:setpoint to 0.
+global pidYaw is pidLoop(3, 0.001, 5).
+set pidYaw:setpoint to 0.
+global pidRol is pidLoop(2, 0.001, 4).
+set pidRol:setpoint to 0.
+
+// Flaps initial trim and control deflections
+global degFlpTrm is 45.
+global degFL is 0.
+global degFR is 0.
+global degAL is 0.
+global degAR is 0.
+global degPitCsf is 0.
+global degYawCsf is 0.
+global degRolCsf is 0.
+
 global arrRaptorVac is list().
 
 //---------------------------------------------------------------------------------------------------------------------
@@ -253,6 +274,40 @@ function calculate_lrp {
 	set degPitTrg to cnsLrp - qrcLrp.
 }
 
+function calculate_csf {
+	set degPitCsf to pidPit:update(time:seconds, degPitAct - degPitTrg).
+	set degYawCsf to pidYaw:update(time:seconds, degYawAct - degYawTrg).
+	set degRolCsf to pidRol:update(time:seconds, degRolAct).
+}
+
+function set_flaps { // Sets the angle of the flaps combining the trim and the total control surface deflection
+	// Set initial trim
+	set degFL to degFlpTrm.
+	set degFR to degFlpTrm.
+	set degAL to degFlpTrm.
+	set degAR to degFlpTrm.
+	// Add pitch deflection
+	set degFL to degFL - degPitCsf.
+	set degFR to degFR - degPitCsf.
+	set degAL to degAL + degPitCsf.
+	set degAR to degAR + degPitCsf.
+	// Add yaw deflection
+	set degFL to degFL - degYawCsf.
+	set degFR to degFR + degYawCsf.
+	set degAL to degAL + degYawCsf.
+	set degAR to degAR - degYawCsf.
+	// Add roll deflection
+	set degFL to degFL + degRolCsf.
+	set degFR to degFR - degRolCsf.
+	set degAL to degAL + degRolCsf.
+	set degAR to degAR - degRolCsf.
+	// Set final control surface deflection
+	mdFlapFLCS:setfield("deploy angle", max(degFL, 0)).
+	mdFlapFRCS:setfield("deploy angle", max(degFR, 0)).
+	mdFlapALCS:setfield("deploy angle", max(degAL, 0)).
+	mdFlapARCS:setfield("deploy angle", max(degAR, 0)).
+}
+
 //---------------------------------------------------------------------------------------------------------------------
 // #endregion
 //---------------------------------------------------------------------------------------------------------------------
@@ -318,7 +373,19 @@ write_console().
 rcs on.
 lock steering to lookdirup(heading(pad:heading, max(min(degPitTrg, degPitMax), degPitMin)):vector, SHIP:srfRetrograde:vector).
 
-until kpaDynPrs > 100 {
+until kpaDynPrs > kpaMeso {
 	write_screen("Thermosphere (RCS)").
 	calculate_lrp().
+}
+
+// Stage MESOSPHERE
+rcs off.
+unlock steering.
+
+until kpaDynPrs > 100 {
+	write_screen("Mesosphere (Flaps)").
+	calculate_lrp().
+	calculate_csf().
+	print  "degPitCsf:    " + round(degPitCsf, 2) + "    " at(0, 21).
+	set_flaps().
 }

@@ -8,10 +8,10 @@ global pad is latlng(26.0385053, -97.1530816). // Aim point - BC
 global degPadEnt is 262.
 
 // Variables for long range pitch tracking
-global mLrpTrg is 12000.
 // 105 worked for 264 starting mass - 95 worked for 144 starting mass
 // Solution is to make cnsLrp = (Mass / 12) + 83
 global cnsLrp is (SHIP:mass / 12) + 83.
+global mLrpTrg is 12000.
 global ratLrp is 0.011.
 global qrcLrp is 0.
 
@@ -19,6 +19,7 @@ global qrcLrp is 0.
 global degPitMax is 80.
 global degPitMin is 40.
 
+// Set target values
 global degPitTrg is 0.
 global degYawTrg is 0.
 
@@ -43,6 +44,7 @@ global degPitCsf is 0.
 global degYawCsf is 0.
 global degRolCsf is 0.
 
+global arrSSFlaps is list().
 global arrRaptorVac is list().
 
 //---------------------------------------------------------------------------------------------------------------------
@@ -105,10 +107,22 @@ if defined ptSSBody {
 }
 
 // Bind to modules within StarShip Flaps
-if defined ptFlapFL { set mdFlapFLCS to ptFlapFL:getmodule("ModuleSEPControlSurface"). }
-if defined ptFlapFR { set mdFlapFRCS to ptFlapFR:getmodule("ModuleSEPControlSurface"). }
-if defined ptFlapAL { set mdFlapALCS to ptFlapAL:getmodule("ModuleSEPControlSurface"). }
-if defined ptFlapAR { set mdFlapARCS to ptFlapAR:getmodule("ModuleSEPControlSurface"). }
+if defined ptFlapFL {
+	set mdFlapFLCS to ptFlapFL:getmodule("ModuleSEPControlSurface").
+	arrSSFlaps:add(mdFlapFLCS).
+}
+if defined ptFlapFR {
+	set mdFlapFRCS to ptFlapFR:getmodule("ModuleSEPControlSurface").
+	arrSSFlaps:add(mdFlapFRCS).
+}
+if defined ptFlapAL {
+	set mdFlapALCS to ptFlapAL:getmodule("ModuleSEPControlSurface").
+	arrSSFlaps:add(mdFlapALCS).
+}
+if defined ptFlapAR {
+	set mdFlapARCS to ptFlapAR:getmodule("ModuleSEPControlSurface").
+	arrSSFlaps:add(mdFlapARCS).
+}
 
 //---------------------------------------------------------------------------------------------------------------------
 // #endregion
@@ -133,8 +147,7 @@ lock remHDProp to (rsHDCH4:amount / rsHDCH4:capacity) * 100.
 // #region FUNCTIONS
 //---------------------------------------------------------------------------------------------------------------------
 
-function write_console {
-
+function write_console { // Write unchanging display elements
 		clearScreen.
 		print "Phase:        " at (0, 0).
 		print "----------------------------" at (0, 1).
@@ -157,11 +170,9 @@ function write_console {
 		print "----------------------------" at (0, 18).
 		print "Header prop:  " at (0, 19).
 		print "Throttle:     " at (0, 20).
-
 }
 
-function write_screen {
-
+function write_screen { // Write dynamic display elements and write telemetry to logfile
 		parameter phase.
 		print phase + "        " at (14, 0).
 		// print "----------------------------".
@@ -202,7 +213,6 @@ function write_screen {
 		set logline to logline + round(remHDProp, 2) + ",".
 		set logline to logline + round(throttle, 2) + ",".
 		log logline to ss_edl_earth_log.csv.
-
 }
 
 function get_pit {
@@ -259,7 +269,7 @@ function heading_of_vector { // Returns the heading of the vector (number range 
 		if result < 0 { return 360 + result. } else { return result. }
 }
 
-function relative_bearing {
+function relative_bearing { // Returns the delta angle between two supplied headings
 		parameter headA.
 		parameter headB.
 		local delta is headB - headA.
@@ -268,13 +278,13 @@ function relative_bearing {
 		return delta.
 }
 
-function calculate_lrp {
+function calculate_lrp { // Calculate the desired pitch for long range tracking
 	set mLrpTot to (mPad - mLrpTrg).
 	set qrcLrp to 1000 * ((mLrpTot / (SHIP:groundspeed * (SHIP:altitude / 1000) * (SHIP:altitude / 1000))) - ((mLrpTot / 1000) * (ratLrp / 1000))).
 	set degPitTrg to cnsLrp - qrcLrp.
 }
 
-function calculate_csf {
+function calculate_csf { // Calculate the pitch, yaw and roll control surface deflections
 	set degPitCsf to pidPit:update(time:seconds, degPitAct - degPitTrg).
 	set degYawCsf to pidYaw:update(time:seconds, degYawAct - degYawTrg).
 	set degRolCsf to pidRol:update(time:seconds, degRolAct).
@@ -335,31 +345,17 @@ ptRaptorSLC:shutdown.
 // Shut down vaccuum Raptors
 for ptRaptorVac in arrRaptorVac { ptRaptorVac:shutdown. }
 
-// Disable manual control of flaps
-mdFlapFLCS:setfield("pitch", true).
-mdFlapFRCS:setfield("pitch", true).
-mdFlapALCS:setfield("pitch", true).
-mdFlapARCS:setfield("pitch", true).
-mdFlapFLCS:setfield("yaw", true).
-mdFlapFRCS:setfield("yaw", true).
-mdFlapALCS:setfield("yaw", true).
-mdFlapARCS:setfield("yaw", true).
-mdFlapFLCS:setfield("roll", true).
-mdFlapFRCS:setfield("roll", true).
-mdFlapALCS:setfield("roll", true).
-mdFlapARCS:setfield("roll", true).
-
-// Set starting angles
-mdFlapFLCS:setfield("deploy angle", 0).
-mdFlapFRCS:setfield("deploy angle", 0).
-mdFlapALCS:setfield("deploy angle", 0).
-mdFlapARCS:setfield("deploy angle", 0).
-
-// deploy control surfaces
-mdFlapFLCS:setfield("deploy", true).
-mdFlapFRCS:setfield("deploy", true).
-mdFlapALCS:setfield("deploy", true).
-mdFlapARCS:setfield("deploy", true).
+// Set flaps
+for mdSSFlap in arrSSFlaps {
+	// Disable manual control
+	mdSSFlap:setfield("pitch", true).
+	mdSSFlap:setfield("yaw", true).
+	mdSSFlap:setfield("roll", true).
+	// Set starting angles
+	mdSSFlap:setfield("deploy angle", degFlpTrm).
+	// deploy control surfaces
+	mdSSFlap:setfield("deploy", true).
+}
 
 //---------------------------------------------------------------------------------------------------------------------
 // #endregion
@@ -368,6 +364,8 @@ mdFlapARCS:setfield("deploy", true).
 //---------------------------------------------------------------------------------------------------------------------
 
 write_console().
+
+// Need to transfer maximum fuel to header tanks
 
 // Stage THERMOSPHERE
 rcs on.
@@ -386,6 +384,7 @@ until kpaDynPrs > 100 {
 	write_screen("Mesosphere (Flaps)").
 	calculate_lrp().
 	calculate_csf().
+	set degYawTrg to kpaDynPrs * (0 - degBerPad).
 	print  "degPitCsf:    " + round(degPitCsf, 2) + "    " at(0, 21).
 	set_flaps().
 }

@@ -4,16 +4,25 @@
 //---------------------------------------------------------------------------------------------------------------------
 
 // Set landing target of SpaceX Boca Chica catch tower
-global pad is latlng(26.0385053, -97.1530816). // Aim point - BC
+global pad is latlng(26.966961, -97.141841). // Aim point - BC
+//global pad is latlng(26.0385053, -97.1530816). // Aim point - BC
 global degPadEnt is 262.
 
-// Variables for long range pitch tracking
+// Ratio of fuel between header and body for balanced EDL
+global ratFlHDBD is 0.2.
+
+// Long range pitch tracking
 // 105 worked for 264 starting mass - 95 worked for 144 starting mass
 // Solution is to make cnsLrp = (Mass / 12) + 83
 global cnsLrp is (SHIP:mass / 12) + 83.
 global mLrpTrg is 12000.
 global ratLrp is 0.011.
 global qrcLrp is 0.
+
+// Short range pitch tracking
+global cnsSrp is 0.017. // surface m gained per m lost in altitude for every degree of pitch forward
+global mSrpTrgDst is 0.
+global mSrpTrgAlt is 1200.
 
 // Set min/max ranges
 global degPitMax is 80.
@@ -25,13 +34,26 @@ global degYawTrg is 0.
 
 // Dynamic pressure thresholds
 global kpaMeso is 0.5.
+global kpaStrt is 8.88.
 
-// PID controllers
-global pidPit is pidLoop(1.5, 0.1, 3).
+// PID controller values
+global arrPitMeso is list (1.5, 0.1, 3).
+global arrYawMeso is list (3, 0.001, 5).
+global arrRolMeso is list (2, 0.001, 4).
+
+global arrPitStrt is list (1.5, 0.1, 3).
+global arrYawStrt is list (3, 0.001, 5).
+global arrRolStrt is list (2, 0.001, 4).
+
+global arrPitTrop is list (1.5, 0.1, 3.5).
+global arrYawTrop is list (1.2, 0.001, 2).
+global arrRolTrop is list (0.6, 0.1, 1).
+
+global pidPit is pidLoop(0, 0, 0).
 set pidPit:setpoint to 0.
-global pidYaw is pidLoop(3, 0.001, 5).
+global pidYaw is pidLoop(0, 0, 0).
 set pidYaw:setpoint to 0.
-global pidRol is pidLoop(2, 0.001, 4).
+global pidRol is pidLoop(0, 0, 0).
 set pidRol:setpoint to 0.
 
 // Flaps initial trim and control deflections
@@ -87,7 +109,6 @@ if defined ptSSHeader {
 
 // Bind to modules & resources within StarShip Command
 if defined ptSSCommand {
-	set mdSSCommand to ptSSCommand:getmodule("ModuleCommand").
 	set mdSSCMRCS to ptSSCommand:getmodule("ModuleRCSFX").
 	// Bind to command tanks
 	for rsc in ptSSCommand:resources {
@@ -139,7 +160,7 @@ lock kpaDynPrs to SHIP:q * constant:atmtokpa.
 lock degPitAct to get_pit(srfprograde).
 lock degYawAct to get_yawnose(SHIP:up).
 lock degRolAct to get_rollnose(SHIP:up).
-lock remHDProp to (rsHDCH4:amount / rsHDCH4:capacity) * 100.
+lock pctHDProp to (rsHDCH4:amount / rsHDCH4:capacity) * 100.
 
 //---------------------------------------------------------------------------------------------------------------------
 // #endregion
@@ -147,29 +168,49 @@ lock remHDProp to (rsHDCH4:amount / rsHDCH4:capacity) * 100.
 // #region FUNCTIONS
 //---------------------------------------------------------------------------------------------------------------------
 
-function write_console { // Write unchanging display elements
+function write_console { // Write unchanging display elements and header line of new CSV file
 		clearScreen.
 		print "Phase:        " at (0, 0).
 		print "----------------------------" at (0, 1).
-		print "Altitude:     " at (0, 2).
-		print "Dyn pressure: " at (0, 3).
+		print "Altitude:                  m" at (0, 2).
+		print "Dyn pressure:            kpa" at (0, 3).
 		print "----------------------------" at (0, 4).
-		print "Hrz speed:    " at (0, 5).
-		print "Vrt speed:    " at (0, 6).
-		print "Air speed:    " at (0, 7).
+		print "Hrz speed:               m/s" at (0, 5).
+		print "Vrt speed:               m/s" at (0, 6).
+		print "Air speed:               m/s" at (0, 7).
 		print "----------------------------" at (0, 8).
-		print "Pad distance: " at (0, 9).
-		print "Srf distance: " at (0, 10).
-		print "Target pitch: " at (0, 11).
-		print "Actual pitch: " at (0, 12).
+		print "Pad distance:             km" at (0, 9).
+		print "Srf distance:             km" at (0, 10).
+		print "Target pitch:            deg" at (0, 11).
+		print "Actual pitch:            deg" at (0, 12).
 		print "----------------------------" at (0, 13).
-		print "Pad bearing:  " at (0, 14).
-		print "Target yaw:   " at (0, 15).
-		print "Actual yaw:   " at (0, 16).
-		print "Actual roll:  " at (0, 17).
+		print "Pad bearing:             deg" at (0, 14).
+		print "Target yaw:              deg" at (0, 15).
+		print "Actual yaw:              deg" at (0, 16).
+		print "Actual roll:             deg" at (0, 17).
 		print "----------------------------" at (0, 18).
-		print "Header prop:  " at (0, 19).
-		print "Throttle:     " at (0, 20).
+		print "Header prop:               %" at (0, 19).
+		print "Throttle:" at (0, 20).
+
+		deletePath(ss_edl_earth_log.csv).
+		local logline is "Time,".
+		set logline to logline + "Phase,".
+		set logline to logline + "Altitude,".
+		set logline to logline + "Dyn pressure,".
+		set logline to logline + "Hrz speed,".
+		set logline to logline + "Vrt speed,".
+		set logline to logline + "Air speed,".
+		set logline to logline + "Pad distance,".
+		set logline to logline + "Srf distance,".
+		set logline to logline + "Target pitch,".
+		set logline to logline + "Actual pitch,".
+		set logline to logline + "Pad bearing,".
+		set logline to logline + "Target yaw,".
+		set logline to logline + "Actual yaw,".
+		set logline to logline + "Actual roll,".
+		set logline to logline + "Header prop,".
+		set logline to logline + "Throttle,".
+		log logline to Earth_edl_log.
 }
 
 function write_screen { // Write dynamic display elements and write telemetry to logfile
@@ -183,8 +224,8 @@ function write_screen { // Write dynamic display elements and write telemetry to
 		print round(SHIP:verticalspeed, 0) + "    " at (14, 6).
 		print round(SHIP:airspeed, 0) + "    " at (14, 7).
 		// print "----------------------------".
-		print round(mPad, 0) + "    " at (14, 9).
-		print round(mSrf, 0) + "    " at (14, 10).
+		print round(mPad / 1000, 0) + "    " at (14, 9).
+		print round(mSrf / 1000, 0) + "    " at (14, 10).
 		print round(degPitTrg, 2) + "    " at (14, 11).
 		print round(degPitAct, 2) + "    " at (14, 12).
 		// print "----------------------------".
@@ -193,7 +234,7 @@ function write_screen { // Write dynamic display elements and write telemetry to
 		print round(degYawAct, 2) + "    " at (14, 16).
 		print round(degRolAct, 2) + "    " at (14, 17).
 		// print "----------------------------".
-		print round(remHDProp, 2) + "    " at (14, 19).
+		print round(pctHDProp, 2) + "    " at (14, 19).
 		print round(throttle, 2) + "    " at (14, 20).
 
 		local logline is time:seconds + ",".
@@ -210,7 +251,7 @@ function write_screen { // Write dynamic display elements and write telemetry to
 		set logline to logline + round(degBerPad, 2) + ",".
 		set logline to logline + round(degYawTrg, 2) + ",".
 		set logline to logline + round(degRolAct, 2) + ",".
-		set logline to logline + round(remHDProp, 2) + ",".
+		set logline to logline + round(pctHDProp, 2) + ",".
 		set logline to logline + round(throttle, 2) + ",".
 		log logline to ss_edl_earth_log.csv.
 }
@@ -282,6 +323,12 @@ function calculate_lrp { // Calculate the desired pitch for long range tracking
 	set mLrpTot to (mPad - mLrpTrg).
 	set qrcLrp to 1000 * ((mLrpTot / (SHIP:groundspeed * (SHIP:altitude / 1000) * (SHIP:altitude / 1000))) - ((mLrpTot / 1000) * (ratLrp / 1000))).
 	set degPitTrg to cnsLrp - qrcLrp.
+}
+
+function calculate_srp {
+	set kmTotAlt to (SHIP:altitude - mSrpTrgAlt) / 1000.
+	set knTotDst to (mSrf - mSrpTrgDst) / 1000.
+	set degPitTrg to 90 - ((knTotDst / kmTotAlt) / cnsSrp).
 }
 
 function calculate_csf { // Calculate the pitch, yaw and roll control surface deflections
@@ -365,7 +412,34 @@ for mdSSFlap in arrSSFlaps {
 
 write_console().
 
-// Need to transfer maximum fuel to header tanks
+// Stage BALANCE FUEL
+local ltrLOXTot is 0.
+if defined rsHDLOX { set ltrLOXTot to ltrLOXTot + rsHDLOX:amount. }
+if defined rsCMLOX { set ltrLOXTot to ltrLOXTot + rsCMLOX:amount. }
+if defined rsBDLOX { set ltrLOXTot to ltrLOXTot + rsBDLOX:amount. }
+local ltrCH4Tot is 0.
+if defined rsHDCH4 { set ltrCH4Tot to ltrCH4Tot + rsHDCH4:amount. }
+if defined rsCMCH4 { set ltrCH4Tot to ltrCH4Tot + rsCMCH4:amount. }
+if defined rsBDCH4 { set ltrCH4Tot to ltrCH4Tot + rsBDCH4:amount. }
+
+until ((abs((rsHDLOX:amount / rsBDLOX:amount) - ratFlHDBD) < 0.01) and (abs((rsHDCH4:amount / rsBDCH4:amount) - ratFlHDBD) < 0.01)) {
+	write_screen("Balance fuel").
+	if (rsHDLOX:amount / rsBDLOX:amount) > ratFlHDBD {
+		set trnLOXH2B to transfer("lqdOxygen", ptSSHeader, ptSSBody, rsHDLOX:amount / 20).
+		set trnLOXH2B:active to true.
+	} else {
+		set trnLOXB2H to transfer("lqdOxygen", ptSSBody, ptSSHeader, rsHDLOX:amount / 20).
+		set trnLOXB2H:active to true.
+	}
+	if (rsHDCH4:amount / rsBDCH4:amount) > ratFlHDBD {
+		set trnCH4H2B to transfer("LqdMethane", ptSSHeader, ptSSBody, rsHDCH4:amount / 20).
+		set trnCH4H2B:active to true.
+	} else {
+		set trnCH4B2H to transfer("LqdMethane", ptSSBody, ptSSHeader, rsHDCH4:amount / 20).
+		set trnCH4B2H:active to true.
+	}
+}
+
 
 // Stage THERMOSPHERE
 rcs on.
@@ -379,12 +453,41 @@ until kpaDynPrs > kpaMeso {
 // Stage MESOSPHERE
 rcs off.
 unlock steering.
+set pidPit to pidLoop(arrPitMeso[0], arrPitMeso[1], arrPitMeso[2]).
+set pidYaw to pidLoop(arrYawMeso[0], arrYawMeso[1], arrYawMeso[2]).
+set pidPit to pidLoop(arrRolMeso[0], arrRolMeso[1], arrRolMeso[2]).
 
-until kpaDynPrs > 100 {
+until kpaDynPrs > kpaStrt {
 	write_screen("Mesosphere (Flaps)").
 	calculate_lrp().
 	calculate_csf().
 	set degYawTrg to kpaDynPrs * (0 - degBerPad).
-	print  "degPitCsf:    " + round(degPitCsf, 2) + "    " at(0, 21).
 	set_flaps().
 }
+
+// Stage STRATOSPHERE
+set pidPit to pidLoop(arrPitStrt[0], arrPitStrt[1], arrPitStrt[2]).
+set pidYaw to pidLoop(arrYawStrt[0], arrYawStrt[1], arrYawStrt[2]).
+set pidPit to pidLoop(arrRolStrt[0], arrRolStrt[1], arrRolStrt[2]).
+
+until mSrf < mLrpTrg {
+	write_screen("Stratosphere (Flaps)").
+	calculate_lrp().
+	calculate_csf().
+	set degYawTrg to kpaDynPrs * (0 - degBerPad).
+	set_flaps().
+}
+
+// Stage TROPOSPHERE
+set pidPit to pidLoop(arrPitTrop[0], arrPitTrop[1], arrPitTrop[2]).
+set pidYaw to pidLoop(arrYawTrop[0], arrYawTrop[1], arrYawTrop[2]).
+set pidPit to pidLoop(arrRolTrop[0], arrRolTrop[1], arrRolTrop[2]).
+
+until SHIP:altitude < mSrpTrgAlt {
+	write_screen("Troposphere (Flaps)").
+	calculate_srp().
+	calculate_csf().
+	set degYawTrg to get_yawnose(SHIP:north).
+	set_flaps().
+}
+

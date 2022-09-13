@@ -4,17 +4,17 @@
 //---------------------------------------------------------------------------------------------------------------------
 
 // Set landing target of SpaceX Boca Chica catch tower
-global pad is latlng(26.966961, -97.141841). // Aim point - BC
+global pad is latlng(25.966961, -97.141841). // Aim point - BC
 //global pad is latlng(26.0385053, -97.1530816). // Aim point - BC
 global degPadEnt is 262.
 
 // Ratio of fuel between header and body for balanced EDL
-global ratFlHDBD is 0.2.
+global ratFlHDBD is 0.1.
 
 // Long range pitch tracking
 // 105 worked for 264 starting mass - 95 worked for 144 starting mass
 // Solution is to make cnsLrp = (Mass / 12) + 83
-global cnsLrp is (SHIP:mass / 12) + 83.
+global cnsLrp is (SHIP:mass / 12) + 89.
 global mLrpTrg is 12000.
 global ratLrp is 0.011.
 global qrcLrp is 0.
@@ -32,9 +32,10 @@ global degPitMin is 40.
 global degPitTrg is 0.
 global degYawTrg is 0.
 
-// Dynamic pressure thresholds
+// stage thresholds
 global kpaMeso is 0.5.
-global kpaStrt is 8.88.
+global mAltStrt is 50000.
+global msMinSpd is 550.
 
 // PID controller values
 global arrPitMeso is list (1.5, 0.1, 3).
@@ -45,9 +46,13 @@ global arrPitStrt is list (1.5, 0.1, 3).
 global arrYawStrt is list (3, 0.001, 5).
 global arrRolStrt is list (2, 0.001, 4).
 
-global arrPitTrop is list (1.5, 0.1, 3.5).
-global arrYawTrop is list (1.2, 0.001, 2).
-global arrRolTrop is list (0.6, 0.1, 1).
+global arrPitTrns is list (1.5, 0.1, 3.5).
+global arrYawTrns is list (1.2, 0.001, 2).
+global arrRolTrns is list (0.6, 0.1, 1).
+
+global arrPitFlop is list (1, 0.1, 3.5).
+global arrYawFlop is list (1.5, 0.001, 1).
+global arrRolFlop is list (1, 0.001, 1).
 
 global pidPit is pidLoop(0, 0, 0).
 set pidPit:setpoint to 0.
@@ -151,15 +156,15 @@ if defined ptFlapAR {
 // #region LOCKS
 //---------------------------------------------------------------------------------------------------------------------
 
-lock headSS to heading_of_vector(SHIP:srfprograde:vector).
+lock headSS to vang(north:vector, SHIP:srfPrograde:vector).
 lock vecPad to vxcl(up:vector, pad:position).
 lock degBerPad to relative_bearing(headSS, pad:heading).
 lock mPad to pad:distance.
 lock mSrf to (vecPad - vxcl(up:vector, SHIP:geoposition:position)):mag.
 lock kpaDynPrs to SHIP:q * constant:atmtokpa.
 lock degPitAct to get_pit(srfprograde).
-lock degYawAct to get_yawnose(SHIP:up).
-lock degRolAct to get_rollnose(SHIP:up).
+lock degYawAct to get_yaw(SHIP:up).
+lock degRolAct to get_roll(SHIP:up).
 lock pctHDProp to (rsHDCH4:amount / rsHDCH4:capacity) * 100.
 
 //---------------------------------------------------------------------------------------------------------------------
@@ -210,7 +215,7 @@ function write_console { // Write unchanging display elements and header line of
 		set logline to logline + "Actual roll,".
 		set logline to logline + "Header prop,".
 		set logline to logline + "Throttle,".
-		log logline to Earth_edl_log.
+		log logline to ss_edl_earth_log.csv.
 }
 
 function write_screen { // Write dynamic display elements and write telemetry to logfile
@@ -267,24 +272,7 @@ function get_pit {
 		if dirPit < 0 { return degPit. } else { return (0 - degPit). }
 }
 
-function get_yawdock {
-		parameter rTarget.
-		local fcgShip is SHIP:facing.
-
-		local svlYaw is vxcl(fcgShip:topvector, rTarget:forevector):normalized.
-		local dirYaw is vDot(fcgShip:starvector, svlYaw).
-		local degYaw is vAng(fcgShip:forevector, svlYaw).
-
-		if dirYaw < 0 { return degYaw. } else { return (0 - degYaw). }
-}
-
-function get_rolldock {
-		parameter rDirection.
-		local fcgShip is SHIP:facing.
-		return arcTan2(-vDot(fcgShip:starvector, rDirection:forevector), vDot(fcgShip:topvector, rDirection:forevector)).
-}
-
-function get_yawnose {
+function get_yaw {
 		parameter rTarget.
 		local fcgShip is SHIP:facing.
 
@@ -295,7 +283,7 @@ function get_yawnose {
 		if dirRol > 0 { return degRol. } else { return (0 - degRol). }
 }
 
-function get_rollnose {
+function get_roll {
 		parameter rDirection.
 		local fcgShip is SHIP:facing.
 		return 0 - arcTan2(-vDot(fcgShip:starvector, rDirection:forevector), vDot(fcgShip:topvector, rDirection:forevector)).
@@ -322,13 +310,13 @@ function relative_bearing { // Returns the delta angle between two supplied head
 function calculate_lrp { // Calculate the desired pitch for long range tracking
 	set mLrpTot to (mPad - mLrpTrg).
 	set qrcLrp to 1000 * ((mLrpTot / (SHIP:groundspeed * (SHIP:altitude / 1000) * (SHIP:altitude / 1000))) - ((mLrpTot / 1000) * (ratLrp / 1000))).
-	set degPitTrg to cnsLrp - qrcLrp.
+	return cnsLrp - qrcLrp.
 }
 
 function calculate_srp {
 	set kmTotAlt to (SHIP:altitude - mSrpTrgAlt) / 1000.
 	set knTotDst to (mSrf - mSrpTrgDst) / 1000.
-	set degPitTrg to 90 - ((knTotDst / kmTotAlt) / cnsSrp).
+	return 90 - ((knTotDst / kmTotAlt) / cnsSrp).
 }
 
 function calculate_csf { // Calculate the pitch, yaw and roll control surface deflections
@@ -440,14 +428,13 @@ until ((abs((rsHDLOX:amount / rsBDLOX:amount) - ratFlHDBD) < 0.01) and (abs((rsH
 	}
 }
 
-
 // Stage THERMOSPHERE
 rcs on.
 lock steering to lookdirup(heading(pad:heading, max(min(degPitTrg, degPitMax), degPitMin)):vector, SHIP:srfRetrograde:vector).
 
 until kpaDynPrs > kpaMeso {
 	write_screen("Thermosphere (RCS)").
-	calculate_lrp().
+	set degPitTrg to calculate_lrp().
 }
 
 // Stage MESOSPHERE
@@ -455,39 +442,58 @@ rcs off.
 unlock steering.
 set pidPit to pidLoop(arrPitMeso[0], arrPitMeso[1], arrPitMeso[2]).
 set pidYaw to pidLoop(arrYawMeso[0], arrYawMeso[1], arrYawMeso[2]).
-set pidPit to pidLoop(arrRolMeso[0], arrRolMeso[1], arrRolMeso[2]).
+set pidRol to pidLoop(arrRolMeso[0], arrRolMeso[1], arrRolMeso[2]).
 
-until kpaDynPrs > kpaStrt {
+until SHIP:altitude < mAltStrt {
 	write_screen("Mesosphere (Flaps)").
-	calculate_lrp().
+	set degPitTrg to calculate_lrp().
 	calculate_csf().
 	set degYawTrg to kpaDynPrs * (0 - degBerPad).
 	set_flaps().
 }
 
 // Stage STRATOSPHERE
-set pidPit to pidLoop(arrPitStrt[0], arrPitStrt[1], arrPitStrt[2]).
-set pidYaw to pidLoop(arrYawStrt[0], arrYawStrt[1], arrYawStrt[2]).
-set pidPit to pidLoop(arrRolStrt[0], arrRolStrt[1], arrRolStrt[2]).
+// set pidPit to pidLoop(arrPitStrt[0], arrPitStrt[1], arrPitStrt[2]).
+// set pidYaw to pidLoop(arrYawStrt[0], arrYawStrt[1], arrYawStrt[2]).
+// set pidRol to pidLoop(arrRolStrt[0], arrRolStrt[1], arrRolStrt[2]).
+// lock degYawMax to min(20, sqrt(mPad / 1000)).
 
-until mSrf < mLrpTrg {
+until calculate_srp() > degPitTrg {
 	write_screen("Stratosphere (Flaps)").
-	calculate_lrp().
-	calculate_csf().
+	set degPitTrg to calculate_lrp().
 	set degYawTrg to kpaDynPrs * (0 - degBerPad).
-	set_flaps().
-}
-
-// Stage TROPOSPHERE
-set pidPit to pidLoop(arrPitTrop[0], arrPitTrop[1], arrPitTrop[2]).
-set pidYaw to pidLoop(arrYawTrop[0], arrYawTrop[1], arrYawTrop[2]).
-set pidPit to pidLoop(arrRolTrop[0], arrRolTrop[1], arrRolTrop[2]).
-
-until SHIP:altitude < mSrpTrgAlt {
-	write_screen("Troposphere (Flaps)").
-	calculate_srp().
 	calculate_csf().
-	set degYawTrg to get_yawnose(SHIP:north).
 	set_flaps().
 }
 
+// Stage TRANSITION
+set pidPit to pidLoop(arrPitTrns[0], arrPitTrns[1], arrPitTrns[2]).
+set pidYaw to pidLoop(arrYawTrns[0], arrYawTrns[1], arrYawTrns[2], -1, 1).
+set pidRol to pidLoop(arrRolTrns[0], arrRolTrns[1], arrRolTrns[2], -10, 10).
+lock degYawAct to get_yaw(SHIP:prograde).
+set degYawTrg to 0.
+
+until abs(SHIP:groundspeed / SHIP:verticalspeed) < 0.58 {
+	write_screen("Transition (Unstable)").
+	set degPitTrg to calculate_srp().
+	calculate_csf().
+	set_flaps().
+	print "degPitCsf:   " + round(degPitCsf, 2) + "    " at (0, 21).
+	print "degYawCsf:   " + round(degYawCsf, 2) + "    " at (0, 22).
+	print "degRolCsf:   " + round(degRolCsf, 2) + "    " at (0, 23).
+}
+
+// Stage BELLY FLOP
+set pidPit to pidLoop(arrPitFlop[0], arrPitFlop[1], arrPitFlop[2]).
+set pidYaw to pidLoop(arrYawFlop[0], arrYawFlop[1], arrYawFlop[2], -1, 1).
+set pidRol to pidLoop(arrRolFlop[0], arrRolFlop[1], arrRolFlop[2], -10, 10).
+
+until SHIP:altitude < 1200 {
+	write_screen("Bellyflop (Flaps)").
+	set degPitTrg to calculate_srp().
+	calculate_csf().
+	set_flaps().
+	print "degPitCsf:   " + round(degPitCsf, 2) + "    " at (0, 21).
+	print "degYawCsf:   " + round(degYawCsf, 2) + "    " at (0, 22).
+	print "degRolCsf:   " + round(degRolCsf, 2) + "    " at (0, 23).
+}

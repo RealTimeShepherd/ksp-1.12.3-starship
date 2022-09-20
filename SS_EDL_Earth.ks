@@ -4,11 +4,16 @@
 //---------------------------------------------------------------------------------------------------------------------
 
 // Define Boca Chica catch tower - long term get this from target info
-global pad is latlng(25.966961, -97.141841). // Aim point - BC
+global pad is latlng(25.9669968, -97.1416771). // Tower Catch point - BC OLIT 1
+global mAltCatch is 200.326. // Tower Catch altitude - BC OLIT 1
 global degPadEnt is 262.
-global mAltTG1 is 220.
-global mAltTG2 is 110.
-global mAltTG3 is 80.
+global mAltWP1 is 600.
+global mAltWP2 is 320.
+global mAltWP3 is 300.
+global mAltWP4 is 205.
+global mAltAP1 is 220.
+global mAltAP2 is 110.
+global mAltAP3 is 80.
 
 // Ratio of fuel between header and body for balanced EDL
 global ratFlHDBD is 0.1.
@@ -42,15 +47,15 @@ global arrYawMeso is list (3, 0.001, 5).
 global arrRolMeso is list (2, 0.001, 4).
 
 global arrPitStrt is list (1.5, 0.1, 3).
-global arrYawStrt is list (3, 0.001, 5).
+global arrYawStrt is list (3, 0.001, 4).
 global arrRolStrt is list (2, 0.001, 4).
 
 global arrPitTrns is list (1.5, 0.1, 3.5).
-global arrYawTrns is list (1.2, 0.001, 5).
+global arrYawTrns is list (1.2, 0.001, 4).
 global arrRolTrns is list (0.6, 0.1, 1).
 
 global arrPitFlop is list (1, 0.1, 3.5).
-global arrYawFlop is list (1.5, 0.001, 1).
+global arrYawFlop is list (1.5, 0.001, 4).
 global arrRolFlop is list (1, 0.001, 1).
 
 global pidPit is pidLoop(0, 0, 0).
@@ -74,15 +79,12 @@ global arrSSFlaps is list().
 global arrRaptorVac is list().
 
 // Propulsive landing
+global mAltFnB is 2400.
 global kNThrMin is 1500.
 global degDflMax is 5.
 global mAltTrg is 0.
 global pidThr is pidLoop(0.7, 0.2, 0, 0.0000001, 1).
 set pidThr:setpoint to 0.
-global mAltWP1 is 600.
-global mAltWP2 is 320.
-global mAltWP3 is 300.
-global mAltWP4 is 205.
 
 //---------------------------------------------------------------------------------------------------------------------
 // #endregion
@@ -266,6 +268,7 @@ function write_screen { // Write dynamic display elements and write telemetry to
 		set logline to logline + round(degPitAct, 2) + ",".
 		set logline to logline + round(degBerPad, 2) + ",".
 		set logline to logline + round(degYawTrg, 2) + ",".
+		set logline to logline + round(degYawAct, 2) + ",".
 		set logline to logline + round(degRolAct, 2) + ",".
 		set logline to logline + round(klProp, 0) + ",".
 		set logline to logline + round(throttle * 100, 2) + ",".
@@ -321,13 +324,13 @@ function heading_of_vector { // heading_of_vector returns the heading of the vec
 function calculate_lrp { // Calculate the desired pitch for long range tracking
 	set mLrpTot to (mPad - mLrpTrg).
 	set qrcLrp to 1000 * ((mLrpTot / (SHIP:groundspeed * (SHIP:altitude / 1000) * (SHIP:altitude / 1000))) - ((mLrpTot / 1000) * (ratLrp / 1000))).
-	return cnsLrp - qrcLrp.
+	return max(min(cnsLrp - qrcLrp, degPitMax), degPitMin).
 }
 
 function calculate_srp {
 	set kmTotAlt to (SHIP:altitude - mSrpTrgAlt) / 1000.
 	set knTotDst to (mSrf - mSrpTrgDst) / 1000.
-	return 90 - ((knTotDst / kmTotAlt) / cnsSrp).
+	return max(min(90 - ((knTotDst / kmTotAlt) / cnsSrp), degPitMax), degPitMin).
 }
 
 function calculate_csf { // Calculate the pitch, yaw and roll control surface deflections
@@ -365,8 +368,10 @@ function set_flaps { // Sets the angle of the flaps combining the trim and the t
 }
 
 function set_rcs_translate {
-	set SHIP:control:top to min(1, vecThr:mag) * cos(degThrHed - degPadEnt).
-	set SHIP:control:starboard to 0 - min(1, vecThr:mag) * sin(degThrHed - degPadEnt).
+	parameter mag.
+	parameter deg.
+	set SHIP:control:top to min(1, mag) * cos(deg - degPadEnt).
+	set SHIP:control:starboard to 0 - min(1, mag) * sin(deg - degPadEnt).
 }
 
 //---------------------------------------------------------------------------------------------------------------------
@@ -387,6 +392,9 @@ set SHIP:control:roll to 0.
 // Switch off RCS and SAS
 rcs off.
 sas off.
+
+// Kill throttle
+lock throttle to 0.
 
 // Shut down sea level Raptors
 ptRaptorSLA:shutdown.
@@ -464,7 +472,7 @@ set pidPit to pidLoop(arrPitStrt[0], arrPitStrt[1], arrPitStrt[2]).
 set pidYaw to pidLoop(arrYawStrt[0], arrYawStrt[1], arrYawStrt[2]).
 set pidRol to pidLoop(arrRolStrt[0], arrRolStrt[1], arrRolStrt[2]).
 
-until calculate_srp() > degPitTrg {
+until SHIP:groundspeed < 1600 {
 	write_screen("Stratosphere (Flaps)").
 	set degPitTrg to calculate_lrp().
 	set degYawTrg to kpaDynPrs * (0 - degBerPad).
@@ -472,26 +480,35 @@ until calculate_srp() > degPitTrg {
 	set_flaps().
 }
 
-// Stage: TRANSITION
 set pidPit to pidLoop(arrPitTrns[0], arrPitTrns[1], arrPitTrns[2]).
-set pidYaw to pidLoop(arrYawTrns[0], arrYawTrns[1], arrYawTrns[2], -1, 1).
+set pidYaw to pidLoop(arrYawTrns[0], arrYawTrns[1], arrYawTrns[2], -10, 10).
 set pidRol to pidLoop(arrRolTrns[0], arrRolTrns[1], arrRolTrns[2], -10, 10).
+
+until calculate_srp() > degPitTrg {
+	write_screen("Troposphere (Flaps)").
+	set degPitTrg to calculate_lrp().
+	set degYawTrg to kpaDynPrs * (0 - degBerPad).
+	calculate_csf().
+	set_flaps().
+}
+
+// Stage: TRANSITION
 lock degYawAct to get_yaw(SHIP:prograde).
-set degYawTrg to 0.
 
 until abs(SHIP:groundspeed / SHIP:verticalspeed) < 0.58 {
 	write_screen("Transition (Flaps)").
 	set degPitTrg to calculate_srp().
+	set degYawTrg to 0 - degBerPad.
 	calculate_csf().
 	set_flaps().
 }
 
 // Stage: BELLY FLOP
 set pidPit to pidLoop(arrPitFlop[0], arrPitFlop[1], arrPitFlop[2]).
-set pidYaw to pidLoop(arrYawFlop[0], arrYawFlop[1], arrYawFlop[2], -1, 1).
+set pidYaw to pidLoop(arrYawFlop[0], arrYawFlop[1], arrYawFlop[2], -2, 2).
 set pidRol to pidLoop(arrRolFlop[0], arrRolFlop[1], arrRolFlop[2], -10, 10).
 
-until SHIP:altitude < 1200 {
+until SHIP:altitude < mAltFnB {
 	write_screen("Bellyflop (Flaps)").
 	set degPitTrg to calculate_srp().
 	set degYawTrg to 0 - (degBerPad * 2).
@@ -500,51 +517,48 @@ until SHIP:altitude < 1200 {
 }
 
 // Stage: FLIP & BURN
-rcs on.
+set degPitTrg to 180.
 ptRaptorSLA:activate.
 ptRaptorSLB:activate.
 ptRaptorSLC:activate.
-set throttle to 1.
-set degPitTrg to 90.
+lock throttle to 1.
+lock steering to up.
 
 until ptRaptorSLA:thrust > kNThrMin {
 	write_screen("Flip & Burn").
-	calculate_csf().
-	set_flaps().
 }
 
 // Stage: LANDING BURN
+rcs on.
 mdFlapFLCS:setfield("deploy angle", 0).
 mdFlapFRCS:setfield("deploy angle", 0).
 mdFlapALCS:setfield("deploy angle", 90).
 mdFlapARCS:setfield("deploy angle", 90).
-
-set mAltTrg to mAltTG1.
+set mAltTrg to mAltAP1.
 lock degVAng to vAng(srfPrograde:vector, pad:position).
 lock axsProDes to vcrs(srfPrograde:vector, pad:position).
 lock rotProDes to angleAxis(max(0 - degDflMax, degVAng * (0 - 8) - 1), axsProDes).
 lock steering to lookdirup(rotProDes * srfRetrograde:vector, heading(degPadEnt, 0):vector).
-lock mpsVrtTrg to 0 - (sqrt((alt:radar - mAltTrg) / 1000) * 100).
+lock mpsVrtTrg to 0 - (sqrt(abs(alt:radar - mAltTrg) / 1000) * 100).
 
 until SHIP:verticalspeed > mpsVrtTrg {
 	write_screen("Landing Burn").
 }
 
 // Stage: BALANCE THROTTLE
-lock throttle to max(0.0001, pidThr:update(time:seconds, SHIP:verticalspeed - mpsVrtTrg)).
 if SHIP:mass > 180 {
     ptRaptorSLA:shutdown.
 } else {
     ptRaptorSLB:shutdown.
     ptRaptorSLC:shutdown.
 }
+lock throttle to max(0.0001, pidThr:update(time:seconds, SHIP:verticalspeed - mpsVrtTrg)).
 
 until alt:radar < mAltWP1 {
 	write_screen("Balance Throttle").
 }
 
 // Stage: PAD APPROACH
-unlock rotProDes.
 lock vecSrfVel to vxcl(up:vector, SHIP:velocity:surface).
 set sTTR to 0.01 + min(5, mSrf / 20).
 lock vecThr to ((vecPad / sTTR) - vecSrfVel).
@@ -556,29 +570,29 @@ unlock degVAng.
 
 until mSrf < 5 and SHIP:groundspeed < 5 and alt:radar < mAltWP2 {
 	write_screen("Pad approach").
-	set_rcs_translate().
+	set_rcs_translate(vecThr:mag, degThrHed).
 }
 
 // Stage: PAD DESCENT
-set mAltTrg to mAltTG2.
+set mAltTrg to mAltAP2.
 
 until mSrf < 5 and SHIP:groundspeed < 3 and alt:radar < mAltWP3 {
 	write_screen("Pad descent").
-	set_rcs_translate().
+	set_rcs_translate(vecThr:mag, degThrHed).
 }
 
 // Stage: DESCENT
 lock steering to lookDirUp(up:vector, heading(degPadEnt, 0):vector).
-set mAltTrg to mAltTG3.
+set mAltTrg to mAltAP3.
 lock mpsVrtTrg to -5.
 
 until alt:radar < mAltWP4 {
 	write_screen("Descent").
-	set_rcs_translate().
+	set_rcs_translate(vecThr:mag, degThrHed).
 }
 
 // Stage: TOWER CATCH
-set throttle to 0.
+lock throttle to 0.
 set SHIP:control:top to 0.
 set SHIP:control:starboard to 0.
 unlock steering.

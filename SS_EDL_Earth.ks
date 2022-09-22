@@ -47,16 +47,20 @@ global arrYawMeso is list (3, 0.001, 5).
 global arrRolMeso is list (2, 0.001, 4).
 
 global arrPitStrt is list (1.5, 0.1, 3).
-global arrYawStrt is list (3, 0.001, 4).
-global arrRolStrt is list (2, 0.001, 4).
+global arrYawStrt is list (3, 0.001, 3).
+global arrRolStrt is list (2, 0.001, 2).
 
-global arrPitTrns is list (1.5, 0.1, 3.5).
-global arrYawTrns is list (1.2, 0.001, 4).
-global arrRolTrns is list (0.6, 0.1, 1).
+global arrPitTrop is list (1.5, 0.1, 3.5).
+global arrYawTrop is list (1.2, 0.001, 4).
+global arrRolTrop is list (0.6, 0.1, 4).
+
+global arrPitFlre is list (1.5, 0.1, 3.5).
+global arrYawFlre is list (0.9, 0.001, 4).
+global arrRolFlre is list (0.4, 0.1, 4).
 
 global arrPitFlop is list (1, 0.1, 3.5).
-global arrYawFlop is list (1.5, 0.001, 4).
-global arrRolFlop is list (1, 0.001, 1).
+global arrYawFlop is list (1.2, 0.001, 4).
+global arrRolFlop is list (0.6, 0.001, 4).
 
 global pidPit is pidLoop(0, 0, 0).
 set pidPit:setpoint to 0.
@@ -480,9 +484,10 @@ until SHIP:groundspeed < 1600 {
 	set_flaps().
 }
 
-set pidPit to pidLoop(arrPitTrns[0], arrPitTrns[1], arrPitTrns[2]).
-set pidYaw to pidLoop(arrYawTrns[0], arrYawTrns[1], arrYawTrns[2], -10, 10).
-set pidRol to pidLoop(arrRolTrns[0], arrRolTrns[1], arrRolTrns[2], -10, 10).
+// Stage: TROPOSPHERE
+set pidPit to pidLoop(arrPitTrop[0], arrPitTrop[1], arrPitTrop[2]).
+set pidYaw to pidLoop(arrYawTrop[0], arrYawTrop[1], arrYawTrop[2], -10, 10).
+set pidRol to pidLoop(arrRolTrop[0], arrRolTrop[1], arrRolTrop[2], -10, 10).
 
 until calculate_srp() > degPitTrg {
 	write_screen("Troposphere (Flaps)").
@@ -492,13 +497,16 @@ until calculate_srp() > degPitTrg {
 	set_flaps().
 }
 
-// Stage: TRANSITION
+// Stage: FLARE & DROP
 lock degYawAct to get_yaw(SHIP:prograde).
+set pidPit to pidLoop(arrPitFlre[0], arrPitFlre[1], arrPitFlre[2]).
+set pidYaw to pidLoop(arrYawFlre[0], arrYawFlre[1], arrYawFlre[2], -10, 10).
+set pidRol to pidLoop(arrRolFlre[0], arrRolFlre[1], arrRolFlre[2], -10, 10).
 
 until abs(SHIP:groundspeed / SHIP:verticalspeed) < 0.58 {
-	write_screen("Transition (Flaps)").
+	write_screen("Flare & Drop (Flaps)").
 	set degPitTrg to calculate_srp().
-	set degYawTrg to 0 - degBerPad.
+	set degYawTrg to 0 - (degBerPad * 2).
 	calculate_csf().
 	set_flaps().
 }
@@ -517,11 +525,14 @@ until SHIP:altitude < mAltFnB {
 }
 
 // Stage: FLIP & BURN
-set degPitTrg to 180.
+mdSSBDRCS:setfield("rcs", false).
+rcs on.
+set degPitTrg to 160.
 ptRaptorSLA:activate.
 ptRaptorSLB:activate.
 ptRaptorSLC:activate.
 lock throttle to 1.
+// set SHIP:control:pitch to 0.3.
 lock steering to up.
 
 until ptRaptorSLA:thrust > kNThrMin {
@@ -529,7 +540,6 @@ until ptRaptorSLA:thrust > kNThrMin {
 }
 
 // Stage: LANDING BURN
-rcs on.
 mdFlapFLCS:setfield("deploy angle", 0).
 mdFlapFRCS:setfield("deploy angle", 0).
 mdFlapALCS:setfield("deploy angle", 90).
@@ -539,8 +549,7 @@ lock degVAng to vAng(srfPrograde:vector, pad:position).
 lock axsProDes to vcrs(srfPrograde:vector, pad:position).
 lock rotProDes to angleAxis(max(0 - degDflMax, degVAng * (0 - 8) - 1), axsProDes).
 lock steering to lookdirup(rotProDes * srfRetrograde:vector, heading(degPadEnt, 0):vector).
-lock mpsVrtTrg to 0 - (sqrt(abs(alt:radar - mAltTrg) / 1000) * 100).
-
+lock mpsVrtTrg to 0 - (sqrt(abs(SHIP:altitude - mAltTrg) / 1000) * 100).
 until SHIP:verticalspeed > mpsVrtTrg {
 	write_screen("Landing Burn").
 }
@@ -554,7 +563,7 @@ if SHIP:mass > 180 {
 }
 lock throttle to max(0.0001, pidThr:update(time:seconds, SHIP:verticalspeed - mpsVrtTrg)).
 
-until alt:radar < mAltWP1 {
+until SHIP:altitude < mAltWP1 {
 	write_screen("Balance Throttle").
 }
 
@@ -568,7 +577,7 @@ unlock rotProDes.
 unlock axsProDes.
 unlock degVAng.
 
-until mSrf < 5 and SHIP:groundspeed < 5 and alt:radar < mAltWP2 {
+until mSrf < 5 and SHIP:groundspeed < 5 and SHIP:altitude < mAltWP2 {
 	write_screen("Pad approach").
 	set_rcs_translate(vecThr:mag, degThrHed).
 }
@@ -576,7 +585,7 @@ until mSrf < 5 and SHIP:groundspeed < 5 and alt:radar < mAltWP2 {
 // Stage: PAD DESCENT
 set mAltTrg to mAltAP2.
 
-until mSrf < 5 and SHIP:groundspeed < 3 and alt:radar < mAltWP3 {
+until mSrf < 5 and SHIP:groundspeed < 3 and SHIP:altitude < mAltWP3 {
 	write_screen("Pad descent").
 	set_rcs_translate(vecThr:mag, degThrHed).
 }
@@ -586,7 +595,7 @@ lock steering to lookDirUp(up:vector, heading(degPadEnt, 0):vector).
 set mAltTrg to mAltAP3.
 lock mpsVrtTrg to -5.
 
-until alt:radar < mAltWP4 {
+until SHIP:altitude < mAltWP4 {
 	write_screen("Descent").
 	set_rcs_translate(vecThr:mag, degThrHed).
 }

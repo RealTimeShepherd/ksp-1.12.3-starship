@@ -5,15 +5,14 @@
 
 // Define Boca Chica catch tower - long term get this from target info
 global pad is latlng(25.9669968, -97.1416771). // Tower Catch point - BC OLIT 1
-global mAltCatch is 200.326. // Tower Catch altitude - BC OLIT 1
 global degPadEnt is 262.
-global mAltWP1 is 600.
-global mAltWP2 is 320.
-global mAltWP3 is 300.
-global mAltWP4 is 205.
-global mAltAP1 is 220.
-global mAltAP2 is 110.
-global mAltAP3 is 80.
+global mAltWP1 is 600. // Waypoints - ship will travel through these
+global mAltWP2 is 340.
+global mAltWP3 is 320.
+global mAltWP4 is 200.5. // Tower Catch altitude - BC OLIT 1
+global mAltAP1 is 250. // Aim points - ship will aim at these
+global mAltAP2 is 140.
+global mAltAP3 is 110.
 
 // Ratio of fuel between header and body for balanced EDL
 global ratFlHDBD is 0.1.
@@ -40,6 +39,7 @@ global degYawTrg is 0.
 // stage thresholds
 global kpaMeso is 0.5.
 global mAltStrt is 50000.
+global mpsTrop is 1600.
 
 // PID controller values
 global arrPitMeso is list (1.5, 0.1, 3).
@@ -68,6 +68,10 @@ global pidYaw is pidLoop(0, 0, 0).
 set pidYaw:setpoint to 0.
 global pidRol is pidLoop(0, 0, 0).
 set pidRol:setpoint to 0.
+
+// RCS PID controller for flip & burn
+global pidRCS is pidLoop(0.05, 0.001, 2, -1, 1).
+set pidRCS:setpoint to 0.
 
 // Flaps initial trim and control deflections
 global degFlpTrm is 45.
@@ -476,7 +480,7 @@ set pidPit to pidLoop(arrPitStrt[0], arrPitStrt[1], arrPitStrt[2]).
 set pidYaw to pidLoop(arrYawStrt[0], arrYawStrt[1], arrYawStrt[2]).
 set pidRol to pidLoop(arrRolStrt[0], arrRolStrt[1], arrRolStrt[2]).
 
-until SHIP:groundspeed < 1600 {
+until SHIP:groundspeed < mpsTrop {
 	write_screen("Stratosphere (Flaps)").
 	set degPitTrg to calculate_lrp().
 	set degYawTrg to kpaDynPrs * (0 - degBerPad).
@@ -489,7 +493,7 @@ set pidPit to pidLoop(arrPitTrop[0], arrPitTrop[1], arrPitTrop[2]).
 set pidYaw to pidLoop(arrYawTrop[0], arrYawTrop[1], arrYawTrop[2], -10, 10).
 set pidRol to pidLoop(arrRolTrop[0], arrRolTrop[1], arrRolTrop[2], -10, 10).
 
-until calculate_srp() > degPitTrg {
+until calculate_srp() > calculate_lrp() {
 	write_screen("Troposphere (Flaps)").
 	set degPitTrg to calculate_lrp().
 	set degYawTrg to kpaDynPrs * (0 - degBerPad).
@@ -527,19 +531,23 @@ until SHIP:altitude < mAltFnB {
 // Stage: FLIP & BURN
 mdSSBDRCS:setfield("rcs", false).
 rcs on.
-set degPitTrg to 160.
+set degPitTrg to 170.
 ptRaptorSLA:activate.
 ptRaptorSLB:activate.
 ptRaptorSLC:activate.
 lock throttle to 1.
-// set SHIP:control:pitch to 0.3.
-lock steering to up.
+//set SHIP:control:pitch to 0.3.
+set SHIP:control:yaw to 0.
+set SHIP:control:roll to 0.
+// lock steering to up.
 
 until ptRaptorSLA:thrust > kNThrMin {
 	write_screen("Flip & Burn").
+	set SHIP:control:pitch to pidPit:update(time:seconds, degPitAct - degPitTrg).
 }
 
 // Stage: LANDING BURN
+set SHIP:control:pitch to 0.
 mdFlapFLCS:setfield("deploy angle", 0).
 mdFlapFRCS:setfield("deploy angle", 0).
 mdFlapALCS:setfield("deploy angle", 90).

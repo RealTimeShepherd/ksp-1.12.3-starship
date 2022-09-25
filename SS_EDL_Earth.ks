@@ -6,26 +6,26 @@
 // Define Boca Chica catch tower - long term get this from target info
 global pad is latlng(25.9669968, -97.1416771). // Tower Catch point - BC OLIT 1
 global degPadEnt is 262.
-global mAltWP1 is 600. // Waypoints - ship will travel through these
-global mAltWP2 is 340.
-global mAltWP3 is 320.
+global mAltWP1 is 600. // Waypoints - ship will travel through these altitudes
+global mAltWP2 is 400.
+global mAltWP3 is 300.
 global mAltWP4 is 200.5. // Tower Catch altitude - BC OLIT 1
-global mAltAP1 is 250. // Aim points - ship will aim at these
-global mAltAP2 is 140.
-global mAltAP3 is 110.
+global mAltAP1 is 300. // Aim points - ship will aim at these altitudes
+global mAltAP2 is 230.
+global mAltAP3 is 200.
 
 // Ratio of fuel between header and body for balanced EDL
 global ratFlHDBD is 0.1.
 
 // Long range pitch tracking
 global cnsLrp is (SHIP:mass / 12) + 89.
-global mLrpTrg is 12000.
+global mLrpTrg is 12200.
 global ratLrp is 0.011.
 global qrcLrp is 0.
 
 // Short range pitch tracking
 global cnsSrp is 0.017. // surface m gained per m lost in altitude for every degree of pitch forward
-global mSrpTrgDst is 0.
+global mSrpTrgDst is 200.
 global mSrpTrgAlt is 1200.
 
 // Set min/max ranges
@@ -70,7 +70,7 @@ global pidRol is pidLoop(0, 0, 0).
 set pidRol:setpoint to 0.
 
 // RCS PID controller for flip & burn
-global pidRCS is pidLoop(0.05, 0.001, 2, -1, 1).
+global pidRCS is pidLoop(1, 0.1, 2.5, -1, 1).
 set pidRCS:setpoint to 0.
 
 // Flaps initial trim and control deflections
@@ -91,7 +91,7 @@ global mAltFnB is 2400.
 global kNThrMin is 1500.
 global degDflMax is 5.
 global mAltTrg is 0.
-global pidThr is pidLoop(0.7, 0.2, 0, 0.0000001, 1).
+global pidThr is pidLoop(0.3, 0.2, 0, 0.01, 1).
 set pidThr:setpoint to 0.
 
 //---------------------------------------------------------------------------------------------------------------------
@@ -187,6 +187,7 @@ lock degPitAct to get_pit(srfprograde).
 lock degYawAct to get_yaw(SHIP:up).
 lock degRolAct to get_roll(SHIP:up).
 lock klProp to rsHDCH4:amount + rsBDCH4:amount.
+lock mpsVrtTrg to 0.
 
 //---------------------------------------------------------------------------------------------------------------------
 // #endregion
@@ -206,7 +207,7 @@ function write_console { // Write unchanging display elements and header line of
 		print "Air speed:               m/s" at (0, 7).
 		print "----------------------------" at (0, 8).
 		print "Pad distance:             km" at (0, 9).
-		print "Srf distance:             km" at (0, 10).
+		print "Srf distance:              m" at (0, 10).
 		print "Target pitch:            deg" at (0, 11).
 		print "Actual pitch:            deg" at (0, 12).
 		print "----------------------------" at (0, 13).
@@ -217,6 +218,7 @@ function write_console { // Write unchanging display elements and header line of
 		print "----------------------------" at (0, 18).
 		print "Propellant:                l" at (0, 19).
 		print "Throttle:                  %" at (0, 20).
+		print "Target VSpd:             mps" at (0, 21).
 
 		deletePath(ss_edl_earth_log.csv).
 		local logline is "Time,".
@@ -236,6 +238,7 @@ function write_console { // Write unchanging display elements and header line of
 		set logline to logline + "Actual roll,".
 		set logline to logline + "Propellant,".
 		set logline to logline + "Throttle,".
+		set logline to logline + "mpsVrtTrg,".
 		log logline to ss_edl_earth_log.csv.
 }
 
@@ -251,7 +254,7 @@ function write_screen { // Write dynamic display elements and write telemetry to
 		print round(SHIP:airspeed, 0) + "    " at (14, 7).
 		// print "----------------------------".
 		print round(mPad / 1000, 0) + "    " at (14, 9).
-		print round(mSrf / 1000, 0) + "    " at (14, 10).
+		print round(mSrf, 0) + "    " at (14, 10).
 		print round(degPitTrg, 2) + "    " at (14, 11).
 		print round(degPitAct, 2) + "    " at (14, 12).
 		// print "----------------------------".
@@ -262,6 +265,7 @@ function write_screen { // Write dynamic display elements and write telemetry to
 		// print "----------------------------".
 		print round(klProp, 0) + "    " at (14, 19).
 		print round(throttle * 100, 2) + "    " at (14, 20).
+		print round(mpsVrtTrg, 0) + "    " at (14, 21).
 
 		local logline is time:seconds + ",".
 		set logline to logline + phase + ",".
@@ -280,10 +284,11 @@ function write_screen { // Write dynamic display elements and write telemetry to
 		set logline to logline + round(degRolAct, 2) + ",".
 		set logline to logline + round(klProp, 0) + ",".
 		set logline to logline + round(throttle * 100, 2) + ",".
+		set logline to logline + round(mpsVrtTrg, 0) + ",".
 		log logline to ss_edl_earth_log.csv.
 }
 
-function get_pit {
+function get_pit { // Get current pitch
 		parameter rTarget.
 		local fcgShip is SHIP:facing.
 
@@ -294,7 +299,7 @@ function get_pit {
 		if dirPit < 0 { return degPit. } else { return (0 - degPit). }
 }
 
-function get_yaw {
+function get_yaw { // Get current yaw
 		parameter rTarget.
 		local fcgShip is SHIP:facing.
 
@@ -305,7 +310,7 @@ function get_yaw {
 		if dirRol > 0 { return degRol. } else { return (0 - degRol). }
 }
 
-function get_roll {
+function get_roll { // Get current roll
 		parameter rDirection.
 		local fcgShip is SHIP:facing.
 		return 0 - arcTan2(-vDot(fcgShip:starvector, rDirection:forevector), vDot(fcgShip:topvector, rDirection:forevector)).
@@ -335,7 +340,7 @@ function calculate_lrp { // Calculate the desired pitch for long range tracking
 	return max(min(cnsLrp - qrcLrp, degPitMax), degPitMin).
 }
 
-function calculate_srp {
+function calculate_srp { // Calculate the desired pitch for short range tracking
 	set kmTotAlt to (SHIP:altitude - mSrpTrgAlt) / 1000.
 	set knTotDst to (mSrf - mSrpTrgDst) / 1000.
 	return max(min(90 - ((knTotDst / kmTotAlt) / cnsSrp), degPitMax), degPitMin).
@@ -375,7 +380,7 @@ function set_flaps { // Sets the angle of the flaps combining the trim and the t
 	mdFlapARCS:setfield("deploy angle", max(degAR, 0)).
 }
 
-function set_rcs_translate {
+function set_rcs_translate { // Set RCS translation values to target tower
 	parameter mag.
 	parameter deg.
 	set SHIP:control:top to min(1, mag) * cos(deg - degPadEnt).
@@ -400,6 +405,14 @@ set SHIP:control:roll to 0.
 // Switch off RCS and SAS
 rcs off.
 sas off.
+
+// Enable all fuel tanks
+if defined rsHDLOX { set rsHDLOX:enabled to true. }
+if defined rsHDCH4 { set rsHDCH4:enabled to true. }
+if defined rsCMLOX { set rsHDLOX:enabled to true. }
+if defined rsCMCH4 { set rsHDCH4:enabled to true. }
+if defined rsBDLOX { set rsHDLOX:enabled to true. }
+if defined rsBDCH4 { set rsHDCH4:enabled to true. }
 
 // Kill throttle
 lock throttle to 0.
@@ -536,14 +549,12 @@ ptRaptorSLA:activate.
 ptRaptorSLB:activate.
 ptRaptorSLC:activate.
 lock throttle to 1.
-//set SHIP:control:pitch to 0.3.
 set SHIP:control:yaw to 0.
 set SHIP:control:roll to 0.
-// lock steering to up.
 
 until ptRaptorSLA:thrust > kNThrMin {
 	write_screen("Flip & Burn").
-	set SHIP:control:pitch to pidPit:update(time:seconds, degPitAct - degPitTrg).
+	set SHIP:control:pitch to pidRCS:update(time:seconds, degPitAct - degPitTrg).
 }
 
 // Stage: LANDING BURN
@@ -557,51 +568,47 @@ lock degVAng to vAng(srfPrograde:vector, pad:position).
 lock axsProDes to vcrs(srfPrograde:vector, pad:position).
 lock rotProDes to angleAxis(max(0 - degDflMax, degVAng * (0 - 8) - 1), axsProDes).
 lock steering to lookdirup(rotProDes * srfRetrograde:vector, heading(degPadEnt, 0):vector).
-lock mpsVrtTrg to 0 - (sqrt(abs(SHIP:altitude - mAltTrg) / 1000) * 100).
+lock mpsVrtTrg to (mAltTrg - SHIP:altitude) / 5.
+
 until SHIP:verticalspeed > mpsVrtTrg {
 	write_screen("Landing Burn").
+	print "mpsVrtTrg:    " + round(mpsVrtTrg, 2) + "    " at(0, 21).
 }
 
 // Stage: BALANCE THROTTLE
-if SHIP:mass > 180 {
-    ptRaptorSLA:shutdown.
-} else {
-    ptRaptorSLB:shutdown.
-    ptRaptorSLC:shutdown.
-}
-lock throttle to max(0.0001, pidThr:update(time:seconds, SHIP:verticalspeed - mpsVrtTrg)).
+lock mpsVrtTrg to (mAltTrg - SHIP:altitude) / 5.
+lock throttle to max(0.0001, pidThr:update(time:seconds, SHIP:verticalspeed - mpsVrtTrg)). // Attempt to hover at mAltTrg
 
 until SHIP:altitude < mAltWP1 {
 	write_screen("Balance Throttle").
 }
 
 // Stage: PAD APPROACH
+set mAltTrg to mAltAP2.
+if SHIP:mass > 180 {
+    ptRaptorSLA:shutdown.
+} else {
+    ptRaptorSLB:shutdown.
+    ptRaptorSLC:shutdown.
+}
 lock vecSrfVel to vxcl(up:vector, SHIP:velocity:surface).
-set sTTR to 0.01 + min(5, mSrf / 20).
+set sTTR to 0.01 + min(5, mSrf / 10).
 lock vecThr to ((vecPad / sTTR) - vecSrfVel).
 lock degThrHed to heading_of_vector(vecThr).
-lock steering to lookdirup(vecThr + (150 * up:vector), heading(degPadEnt, 0):vector).
+lock steering to lookdirup(vecThr + (300 * up:vector), heading(degPadEnt, 0):vector).
 unlock rotProDes.
 unlock axsProDes.
 unlock degVAng.
 
-until mSrf < 5 and SHIP:groundspeed < 5 and SHIP:altitude < mAltWP2 {
-	write_screen("Pad approach").
-	set_rcs_translate(vecThr:mag, degThrHed).
-}
-
-// Stage: PAD DESCENT
-set mAltTrg to mAltAP2.
-
 until mSrf < 5 and SHIP:groundspeed < 3 and SHIP:altitude < mAltWP3 {
-	write_screen("Pad descent").
+	write_screen("Tower Approach").
 	set_rcs_translate(vecThr:mag, degThrHed).
 }
 
 // Stage: DESCENT
 lock steering to lookDirUp(up:vector, heading(degPadEnt, 0):vector).
 set mAltTrg to mAltAP3.
-lock mpsVrtTrg to -5.
+// lock mpsVrtTrg to -5.
 
 until SHIP:altitude < mAltWP4 {
 	write_screen("Descent").

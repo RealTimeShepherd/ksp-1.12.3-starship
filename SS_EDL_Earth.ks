@@ -3,12 +3,14 @@
 // #region GLOBALS
 //---------------------------------------------------------------------------------------------------------------------
 
+// Logfile
+global log is "ss_edl_earth_log.csv".
+
 // Define Boca Chica catch tower - long term get this from target info
 global pad is latlng(25.9669968, -97.1416771). // Tower Catch point - BC OLIT 1
 global degPadEnt is 262.
 global mAltWP1 is 600. // Waypoints - ship will travel through these altitudes
-global mAltWP2 is 400.
-global mAltWP3 is 300.
+global mAltWP2 is 300.
 global mAltWP4 is 200.5. // Tower Catch altitude - BC OLIT 1
 global mAltAP1 is 300. // Aim points - ship will aim at these altitudes
 global mAltAP2 is 230.
@@ -104,6 +106,7 @@ set pidThr:setpoint to 0.
 for pt in SHIP:parts {
 	if pt:name:startswith("SEP.S20.HEADER") { set ptSSHeader to pt. }
 	if pt:name:startswith("SEP.S20.CREW") { set ptSSCommand to pt. }
+	if pt:name:startswith("SEP.S20.TANKER") { set ptSSCommand to pt. }
 	if pt:name:startswith("SEP.S20.BODY") { set ptSSBody to pt. }
 	if pt:name:startswith("SEP.S20.FWD.LEFT") { set ptFlapFL to pt. }
 	if pt:name:startswith("SEP.S20.FWD.RIGHT") { set ptFlapFR to pt. }
@@ -170,7 +173,6 @@ if defined ptFlapAR {
 	arrSSFlaps:add(mdFlapARCS).
 }
 
-
 //---------------------------------------------------------------------------------------------------------------------
 // #endregion
 //---------------------------------------------------------------------------------------------------------------------
@@ -186,8 +188,12 @@ lock kpaDynPrs to SHIP:q * constant:atmtokpa.
 lock degPitAct to get_pit(srfprograde).
 lock degYawAct to get_yaw(SHIP:up).
 lock degRolAct to get_roll(SHIP:up).
-lock klProp to rsHDCH4:amount + rsBDCH4:amount.
 lock mpsVrtTrg to 0.
+if defined rsCMCH4 {
+	lock klProp to rsHDCH4:amount + rsCMCH4:amount + rsBDCH4:amount.
+} else {
+	lock klProp to rsHDCH4:amount + rsBDCH4:amount.
+}
 
 //---------------------------------------------------------------------------------------------------------------------
 // #endregion
@@ -196,133 +202,133 @@ lock mpsVrtTrg to 0.
 //---------------------------------------------------------------------------------------------------------------------
 
 function write_console { // Write unchanging display elements and header line of new CSV file
-		clearScreen.
-		print "Phase:        " at (0, 0).
-		print "----------------------------" at (0, 1).
-		print "Altitude:                  m" at (0, 2).
-		print "Dyn pressure:            kpa" at (0, 3).
-		print "----------------------------" at (0, 4).
-		print "Hrz speed:               m/s" at (0, 5).
-		print "Vrt speed:               m/s" at (0, 6).
-		print "Air speed:               m/s" at (0, 7).
-		print "----------------------------" at (0, 8).
-		print "Pad distance:             km" at (0, 9).
-		print "Srf distance:              m" at (0, 10).
-		print "Target pitch:            deg" at (0, 11).
-		print "Actual pitch:            deg" at (0, 12).
-		print "----------------------------" at (0, 13).
-		print "Pad bearing:             deg" at (0, 14).
-		print "Target yaw:              deg" at (0, 15).
-		print "Actual yaw:              deg" at (0, 16).
-		print "Actual roll:             deg" at (0, 17).
-		print "----------------------------" at (0, 18).
-		print "Propellant:                l" at (0, 19).
-		print "Throttle:                  %" at (0, 20).
-		print "Target VSpd:             mps" at (0, 21).
+	clearScreen.
+	print "Phase:        " at (0, 0).
+	print "----------------------------" at (0, 1).
+	print "Altitude:                  m" at (0, 2).
+	print "Dyn pressure:            kpa" at (0, 3).
+	print "----------------------------" at (0, 4).
+	print "Hrz speed:               m/s" at (0, 5).
+	print "Vrt speed:               m/s" at (0, 6).
+	print "Air speed:               m/s" at (0, 7).
+	print "----------------------------" at (0, 8).
+	print "Pad distance:             km" at (0, 9).
+	print "Srf distance:              m" at (0, 10).
+	print "Target pitch:            deg" at (0, 11).
+	print "Actual pitch:            deg" at (0, 12).
+	print "----------------------------" at (0, 13).
+	print "Pad bearing:             deg" at (0, 14).
+	print "Target yaw:              deg" at (0, 15).
+	print "Actual yaw:              deg" at (0, 16).
+	print "Actual roll:             deg" at (0, 17).
+	print "----------------------------" at (0, 18).
+	print "Propellant:                l" at (0, 19).
+	print "Throttle:                  %" at (0, 20).
+	print "Target VSpd:             mps" at (0, 21).
 
-		deletePath(ss_edl_earth_log.csv).
-		local logline is "Time,".
-		set logline to logline + "Phase,".
-		set logline to logline + "Altitude,".
-		set logline to logline + "Dyn pressure,".
-		set logline to logline + "Hrz speed,".
-		set logline to logline + "Vrt speed,".
-		set logline to logline + "Air speed,".
-		set logline to logline + "Pad distance,".
-		set logline to logline + "Srf distance,".
-		set logline to logline + "Target pitch,".
-		set logline to logline + "Actual pitch,".
-		set logline to logline + "Pad bearing,".
-		set logline to logline + "Target yaw,".
-		set logline to logline + "Actual yaw,".
-		set logline to logline + "Actual roll,".
-		set logline to logline + "Propellant,".
-		set logline to logline + "Throttle,".
-		set logline to logline + "mpsVrtTrg,".
-		log logline to ss_edl_earth_log.csv.
+	deletePath(log).
+	local logline is "Time,".
+	set logline to logline + "Phase,".
+	set logline to logline + "Altitude,".
+	set logline to logline + "Dyn pressure,".
+	set logline to logline + "Hrz speed,".
+	set logline to logline + "Vrt speed,".
+	set logline to logline + "Air speed,".
+	set logline to logline + "Pad distance,".
+	set logline to logline + "Srf distance,".
+	set logline to logline + "Target pitch,".
+	set logline to logline + "Actual pitch,".
+	set logline to logline + "Pad bearing,".
+	set logline to logline + "Target yaw,".
+	set logline to logline + "Actual yaw,".
+	set logline to logline + "Actual roll,".
+	set logline to logline + "Propellant,".
+	set logline to logline + "Throttle,".
+	set logline to logline + "Target VSpd,".
+	log logline to log.
 }
 
 function write_screen { // Write dynamic display elements and write telemetry to logfile
-		parameter phase.
-		print phase + "        " at (14, 0).
-		// print "----------------------------".
-		print round(SHIP:altitude, 0) + "    " at (14, 2).
-		print round(kpaDynPrs, 2) + "    " at (14, 3).
-		// print "----------------------------".
-		print round(SHIP:groundspeed, 0) + "    " at (14, 5).
-		print round(SHIP:verticalspeed, 0) + "    " at (14, 6).
-		print round(SHIP:airspeed, 0) + "    " at (14, 7).
-		// print "----------------------------".
-		print round(mPad / 1000, 0) + "    " at (14, 9).
-		print round(mSrf, 0) + "    " at (14, 10).
-		print round(degPitTrg, 2) + "    " at (14, 11).
-		print round(degPitAct, 2) + "    " at (14, 12).
-		// print "----------------------------".
-		print round(degBerPad, 2) + "    " at (14, 14).
-		print round(degYawTrg, 2) + "    " at (14, 15).
-		print round(degYawAct, 2) + "    " at (14, 16).
-		print round(degRolAct, 2) + "    " at (14, 17).
-		// print "----------------------------".
-		print round(klProp, 0) + "    " at (14, 19).
-		print round(throttle * 100, 2) + "    " at (14, 20).
-		print round(mpsVrtTrg, 0) + "    " at (14, 21).
+	parameter phase.
+	print phase + "        " at (14, 0).
+	// print "----------------------------".
+	print round(SHIP:altitude, 0) + "    " at (14, 2).
+	print round(kpaDynPrs, 2) + "    " at (14, 3).
+	// print "----------------------------".
+	print round(SHIP:groundspeed, 0) + "    " at (14, 5).
+	print round(SHIP:verticalspeed, 0) + "    " at (14, 6).
+	print round(SHIP:airspeed, 0) + "    " at (14, 7).
+	// print "----------------------------".
+	print round(mPad / 1000, 0) + "    " at (14, 9).
+	print round(mSrf, 0) + "    " at (14, 10).
+	print round(degPitTrg, 2) + "    " at (14, 11).
+	print round(degPitAct, 2) + "    " at (14, 12).
+	// print "----------------------------".
+	print round(degBerPad, 2) + "    " at (14, 14).
+	print round(degYawTrg, 2) + "    " at (14, 15).
+	print round(degYawAct, 2) + "    " at (14, 16).
+	print round(degRolAct, 2) + "    " at (14, 17).
+	// print "----------------------------".
+	print round(klProp, 0) + "    " at (14, 19).
+	print round(throttle * 100, 2) + "    " at (14, 20).
+	print round(mpsVrtTrg, 0) + "    " at (14, 21).
 
-		local logline is time:seconds + ",".
-		set logline to logline + phase + ",".
-		set logline to logline + round(SHIP:altitude, 0) + ",".
-		set logline to logline + round(kpaDynPrs, 2) + ",".
-		set logline to logline + round(SHIP:groundspeed, 0) + ",".
-		set logline to logline + round(SHIP:verticalspeed, 0) + ",".
-		set logline to logline + round(SHIP:airspeed, 0) + ",".
-		set logline to logline + round(mPad, 0) + ",".
-		set logline to logline + round(mSrf, 0) + ",".
-		set logline to logline + round(degPitTrg, 2) + ",".
-		set logline to logline + round(degPitAct, 2) + ",".
-		set logline to logline + round(degBerPad, 2) + ",".
-		set logline to logline + round(degYawTrg, 2) + ",".
-		set logline to logline + round(degYawAct, 2) + ",".
-		set logline to logline + round(degRolAct, 2) + ",".
-		set logline to logline + round(klProp, 0) + ",".
-		set logline to logline + round(throttle * 100, 2) + ",".
-		set logline to logline + round(mpsVrtTrg, 0) + ",".
-		log logline to ss_edl_earth_log.csv.
+	local logline is time:seconds + ",".
+	set logline to logline + phase + ",".
+	set logline to logline + round(SHIP:altitude, 0) + ",".
+	set logline to logline + round(kpaDynPrs, 2) + ",".
+	set logline to logline + round(SHIP:groundspeed, 0) + ",".
+	set logline to logline + round(SHIP:verticalspeed, 0) + ",".
+	set logline to logline + round(SHIP:airspeed, 0) + ",".
+	set logline to logline + round(mPad, 0) + ",".
+	set logline to logline + round(mSrf, 0) + ",".
+	set logline to logline + round(degPitTrg, 2) + ",".
+	set logline to logline + round(degPitAct, 2) + ",".
+	set logline to logline + round(degBerPad, 2) + ",".
+	set logline to logline + round(degYawTrg, 2) + ",".
+	set logline to logline + round(degYawAct, 2) + ",".
+	set logline to logline + round(degRolAct, 2) + ",".
+	set logline to logline + round(klProp, 0) + ",".
+	set logline to logline + round(throttle * 100, 2) + ",".
+	set logline to logline + round(mpsVrtTrg, 0) + ",".
+	log logline to log.
 }
 
 function get_pit { // Get current pitch
-		parameter rTarget.
-		local fcgShip is SHIP:facing.
+	parameter rTarget.
+	local fcgShip is SHIP:facing.
 
-		local svlPit is vxcl(fcgShip:starvector, rTarget:forevector):normalized.
-		local dirPit is vDot(fcgShip:topvector, svlPit).
-		local degPit is vAng(fcgShip:forevector, svlPit).
+	local svlPit is vxcl(fcgShip:starvector, rTarget:forevector):normalized.
+	local dirPit is vDot(fcgShip:topvector, svlPit).
+	local degPit is vAng(fcgShip:forevector, svlPit).
 
-		if dirPit < 0 { return degPit. } else { return (0 - degPit). }
+	if dirPit < 0 { return degPit. } else { return (0 - degPit). }
 }
 
 function get_yaw { // Get current yaw
-		parameter rTarget.
-		local fcgShip is SHIP:facing.
+	parameter rTarget.
+	local fcgShip is SHIP:facing.
 
-		local svlRol is vxcl(fcgShip:topvector, rTarget:forevector):normalized.
-		local dirRol is vDot(fcgShip:starvector, svlRol).
-		local degRol is vAng(fcgShip:forevector, svlRol).
+	local svlRol is vxcl(fcgShip:topvector, rTarget:forevector):normalized.
+	local dirRol is vDot(fcgShip:starvector, svlRol).
+	local degRol is vAng(fcgShip:forevector, svlRol).
 
-		if dirRol > 0 { return degRol. } else { return (0 - degRol). }
+	if dirRol > 0 { return degRol. } else { return (0 - degRol). }
 }
 
 function get_roll { // Get current roll
-		parameter rDirection.
-		local fcgShip is SHIP:facing.
-		return 0 - arcTan2(-vDot(fcgShip:starvector, rDirection:forevector), vDot(fcgShip:topvector, rDirection:forevector)).
+	parameter rDirection.
+	local fcgShip is SHIP:facing.
+	return 0 - arcTan2(-vDot(fcgShip:starvector, rDirection:forevector), vDot(fcgShip:topvector, rDirection:forevector)).
 }
 
 function relative_bearing { // Returns the delta angle between two supplied headings
-		parameter headA.
-		parameter headB.
-		local delta is headB - headA.
-		if delta > 180 { return delta - 360. }
-		if delta < -180 { return delta + 360. }
-		return delta.
+	parameter headA.
+	parameter headB.
+	local delta is headB - headA.
+	if delta > 180 { return delta - 360. }
+	if delta < -180 { return delta + 360. }
+	return delta.
 }
 
 function heading_of_vector { // heading_of_vector returns the heading of the vector (number range 0 to 360)
@@ -409,10 +415,10 @@ sas off.
 // Enable all fuel tanks
 if defined rsHDLOX { set rsHDLOX:enabled to true. }
 if defined rsHDCH4 { set rsHDCH4:enabled to true. }
-if defined rsCMLOX { set rsHDLOX:enabled to true. }
-if defined rsCMCH4 { set rsHDCH4:enabled to true. }
-if defined rsBDLOX { set rsHDLOX:enabled to true. }
-if defined rsBDCH4 { set rsHDCH4:enabled to true. }
+if defined rsCMLOX { set rsCMLOX:enabled to true. }
+if defined rsCMCH4 { set rsCMCH4:enabled to true. }
+if defined rsBDLOX { set rsBDLOX:enabled to true. }
+if defined rsBDCH4 { set rsBDCH4:enabled to true. }
 
 // Kill throttle
 lock throttle to 0.
@@ -425,7 +431,7 @@ ptRaptorSLC:shutdown.
 // Shut down vaccuum Raptors
 for ptRaptorVac in arrRaptorVac { ptRaptorVac:shutdown. }
 
-// Set flaps
+// Set flaps to entry position
 for mdSSFlap in arrSSFlaps {
 	// Disable manual control
 	mdSSFlap:setfield("pitch", true).
@@ -600,7 +606,7 @@ unlock rotProDes.
 unlock axsProDes.
 unlock degVAng.
 
-until mSrf < 5 and SHIP:groundspeed < 3 and SHIP:altitude < mAltWP3 {
+until mSrf < 5 and SHIP:groundspeed < 3 and SHIP:altitude < mAltWP2 {
 	write_screen("Tower Approach").
 	set_rcs_translate(vecThr:mag, degThrHed).
 }
@@ -625,3 +631,7 @@ ptRaptorSLA:shutdown.
 ptRaptorSLB:shutdown.
 ptRaptorSLC:shutdown.
 write_screen("Tower Catch").
+
+//---------------------------------------------------------------------------------------------------------------------
+// #endregion
+//---------------------------------------------------------------------------------------------------------------------

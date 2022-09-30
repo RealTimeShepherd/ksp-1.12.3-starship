@@ -11,9 +11,24 @@ global arrSSFlaps is list().
 global arrRaptorVac is list().
 global arrRaptorSL is list().
 
-// Set target values
+// Set target orbit values
+global mAPTrg is 500000. // Target apogee
+global mPETrg is 200000. // Target perigee
+global mpsExhVel is 3231. // Raptor engines exhaust velocity (Calculated from in-game telemertry)
+global tpsMLRate is 3.4. // Mass in tons lost per second of all 6 raptor engines firing (From in-game telemetry)
+global cnsGME is 3.986e+14. // Earth's gravitational constant
+global mEarthR is 6375000. // Radius of Earth (m)
+global mAPRad is mAPTrg + mEarthR.
+global mPERad is mPETrg + mEarthR.
+global mpsHrzTrg is sqrt(2 * cnsGME * mAPRad / (mPERad * (mAPRad + mPERad))). // Target velocity at perigee
+
+global mpsVrtTrg is 0.
 global degPitTrg is 0.
 global degYawTrg is 0.
+
+// PID controller for pitch correction
+global pidPit is pidLoop(1, 0.1, 2.5).
+set pidPit:setpoint to 0.
 
 global onBooster is true.
 
@@ -94,7 +109,6 @@ lock kpaDynPrs to SHIP:q * constant:atmtokpa.
 lock degPitAct to get_pit(srfprograde).
 lock degYawAct to get_yaw(SHIP:up).
 lock degRolAct to get_roll(SHIP:up).
-lock mpsVrtTrg to 0.
 if defined rsCMCH4 {
 	lock klProp to rsHDCH4:amount + rsCMCH4:amount + rsBDCH4:amount.
 } else {
@@ -116,18 +130,21 @@ function write_console { // Write unchanging display elements and header line of
 	print "----------------------------" at (0, 4).
 	print "Hrz speed:               m/s" at (0, 5).
 	print "Vrt speed:               m/s" at (0, 6).
-	print "Air speed:               m/s" at (0, 7).
+	print "Orb speed:               m/s" at (0, 7).
 	print "----------------------------" at (0, 8).
-	print "Target pitch:            deg" at (0, 9).
-	print "Actual pitch:            deg" at (0, 10).
-	print "----------------------------" at (0, 11).
-	print "Target yaw:              deg" at (0, 12).
-	print "Actual yaw:              deg" at (0, 13).
-	print "Actual roll:             deg" at (0, 14).
-	print "----------------------------" at (0, 15).
-	print "Propellant:                l" at (0, 16).
-	print "Throttle:                  %" at (0, 17).
-	print "Target VSpd:             mps" at (0, 18).
+	print "Apogee:                    m" at (0, 9).
+	print "Perigee:                   m" at (0, 10).
+	print "Target pitch:            deg" at (0, 11).
+	print "Actual pitch:            deg" at (0, 12).
+	print "----------------------------" at (0, 13).
+	print "Target yaw:              deg" at (0, 14).
+	print "Actual yaw:              deg" at (0, 15).
+	print "Actual roll:             deg" at (0, 16).
+	print "----------------------------" at (0, 17).
+	print "Ship mass:                 t" at (0, 18).
+	print "Propellant:                l" at (0, 19).
+	print "Throttle:                  %" at (0, 20).
+	print "Target VSpd:             mps" at (0, 21).
 
 	deletePath(log).
 	local logline is "Time,".
@@ -136,12 +153,15 @@ function write_console { // Write unchanging display elements and header line of
 	set logline to logline + "Dyn pressure,".
 	set logline to logline + "Hrz speed,".
 	set logline to logline + "Vrt speed,".
-	set logline to logline + "Air speed,".
+	set logline to logline + "Orb speed,".
+	set logline to logline + "Apogee,".
+	set logline to logline + "Perigee,".
 	set logline to logline + "Target pitch,".
 	set logline to logline + "Actual pitch,".
 	set logline to logline + "Target yaw,".
 	set logline to logline + "Actual yaw,".
 	set logline to logline + "Actual roll,".
+	set logline to logline + "Ship mass,".
 	set logline to logline + "Propellant,".
 	set logline to logline + "Throttle,".
 	set logline to logline + "Target VSpd,".
@@ -150,6 +170,7 @@ function write_console { // Write unchanging display elements and header line of
 
 function write_screen { // Write dynamic display elements and write telemetry to logfile
 	parameter phase.
+	parameter writelog.
 	print phase + "        " at (14, 0).
 	// print "----------------------------".
 	print round(SHIP:altitude, 0) + "    " at (14, 2).
@@ -157,35 +178,43 @@ function write_screen { // Write dynamic display elements and write telemetry to
 	// print "----------------------------".
 	print round(SHIP:groundspeed, 0) + "    " at (14, 5).
 	print round(SHIP:verticalspeed, 0) + "    " at (14, 6).
-	print round(SHIP:airspeed, 0) + "    " at (14, 7).
+	print round(SHIP:velocity:orbit:mag, 0) + "    " at (14, 7).
 	// print "----------------------------".
-	print round(degPitTrg, 2) + "    " at (14, 9).
-	print round(degPitAct, 2) + "    " at (14, 10).
+	print round(SHIP:orbit:apoapsis, 0) + "    " at (14, 9).
+	print round(SHIP:orbit:periapsis, 0) + "    " at (14, 10).
+	print round(degPitTrg, 2) + "    " at (14, 11).
+	print round(degPitAct, 2) + "    " at (14, 12).
 	// print "----------------------------".
-	print round(degYawTrg, 2) + "    " at (14, 12).
-	print round(degYawAct, 2) + "    " at (14, 13).
-	print round(degRolAct, 2) + "    " at (14, 14).
+	print round(degYawTrg, 2) + "    " at (14, 14).
+	print round(degYawAct, 2) + "    " at (14, 15).
+	print round(degRolAct, 2) + "    " at (14, 16).
 	// print "----------------------------".
-	print round(klProp, 0) + "    " at (14, 16).
-	print round(throttle * 100, 2) + "    " at (14, 17).
-	print round(mpsVrtTrg, 0) + "    " at (14, 18).
+	print round(SHIP:mass, 2) + "    " at (14, 18).
+	print round(klProp, 0) + "    " at (14, 19).
+	print round(throttle * 100, 2) + "    " at (14, 20).
+	print round(mpsVrtTrg, 0) + "    " at (14, 21).
 
-	local logline is time:seconds + ",".
-	set logline to logline + phase + ",".
-	set logline to logline + round(SHIP:altitude, 0) + ",".
-	set logline to logline + round(kpaDynPrs, 2) + ",".
-	set logline to logline + round(SHIP:groundspeed, 0) + ",".
-	set logline to logline + round(SHIP:verticalspeed, 0) + ",".
-	set logline to logline + round(SHIP:airspeed, 0) + ",".
-	set logline to logline + round(degPitTrg, 2) + ",".
-	set logline to logline + round(degPitAct, 2) + ",".
-	set logline to logline + round(degYawTrg, 2) + ",".
-	set logline to logline + round(degYawAct, 2) + ",".
-	set logline to logline + round(degRolAct, 2) + ",".
-	set logline to logline + round(klProp, 0) + ",".
-	set logline to logline + round(throttle * 100, 2) + ",".
-	set logline to logline + round(mpsVrtTrg, 0) + ",".
-	log logline to log.
+	if writelog = true {
+		local logline is time:seconds + ",".
+		set logline to logline + phase + ",".
+		set logline to logline + round(SHIP:altitude, 0) + ",".
+		set logline to logline + round(kpaDynPrs, 2) + ",".
+		set logline to logline + round(SHIP:groundspeed, 0) + ",".
+		set logline to logline + round(SHIP:verticalspeed, 0) + ",".
+		set logline to logline + round(SHIP:velocity:orbit:mag, 0) + ",".
+		set logline to logline + round(SHIP:orbit:apoapsis, 2) + ",".
+		set logline to logline + round(SHIP:orbit:periapsis, 2) + ",".
+		set logline to logline + round(degPitTrg, 2) + ",".
+		set logline to logline + round(degPitAct, 2) + ",".
+		set logline to logline + round(degYawTrg, 2) + ",".
+		set logline to logline + round(degYawAct, 2) + ",".
+		set logline to logline + round(degRolAct, 2) + ",".
+		set logline to logline + round(SHIP:mass, 2) + ",".
+		set logline to logline + round(klProp, 0) + ",".
+		set logline to logline + round(throttle * 100, 2) + ",".
+		set logline to logline + round(mpsVrtTrg, 0) + ",".
+		log logline to log.
+	}
 }
 
 function get_pit { // Get current pitch
@@ -214,6 +243,12 @@ function get_roll { // Get current roll
 	parameter rDirection.
 	local fcgShip is SHIP:facing.
 	return 0 - arcTan2(-vDot(fcgShip:starvector, rDirection:forevector), vDot(fcgShip:topvector, rDirection:forevector)).
+}
+
+function calculate_tvspd {
+	local tEnd is SHIP:mass / (constant:e ^ ((mpsHrzTrg - SHIP:orbit:surface:mag) - mpsExhVel)). // Calculate end mass (t)
+	local sToTrg is (SHIP:mass - tEnd) / tpsMLRate. // Calculate time to end mass (s)
+	return (2 * (mPETrg - SHIP:altitude)) / sToTrg.
 }
 
 //---------------------------------------------------------------------------------------------------------------------
@@ -264,18 +299,22 @@ for mdSSFlap in arrSSFlaps {
 	mdSSFlap:setfield("deploy", true).
 }
 
+write_console().
+
 //---------------------------------------------------------------------------------------------------------------------
 // #endregion
 //---------------------------------------------------------------------------------------------------------------------
 // #region FLIGHT
 //---------------------------------------------------------------------------------------------------------------------
 
-write_console().
+// Stage: PRE-LAUNCH
+until SHIP:verticalspeed > 0.1 {
+	write_screen("Pre-launch", false).
+}
 
-// Stage: On Booster
-
+// Stage: ON BOOSTER
 until onBooster = false {
-	write_screen("On Booster").
+	write_screen("On Booster", true).
 	set onBooster to false.
 	for pt in SHIP:parts {
 		if pt:name:startswith("SEP.B4.INTER") { set onBooster to true. }
@@ -287,9 +326,18 @@ for ptRaptorSL in arrRaptorSL { ptRaptorSL:activate. }
 for ptRaptorVac in arrRaptorVac { ptRaptorVac:activate. }
 lock throttle to 1.
 
-local timeStage is time:seconds + 2.
+local timeStage is time:seconds + 4.
 until time:seconds > timeStage {
-	write_screen("Stage").
+	write_screen("Stage", true).
+}
+
+// Stage: ORBITAL INSERTION
+lock steering to lookDirUp(heading(90, degPitTrg):vector, up:vector).
+
+until arrRaptorVac[0]:getmodule("ModuleEnginesRF"):getfield("thrust") = 0 {
+	write_screen("Orbital Insertion", true).
+	set mpsVrtTrg to calculate_tvspd().
+	set degPitTrg to pidPit:update(time:seconds, SHIP:verticalspeed - mpsVrtTrg).
 }
 
 //---------------------------------------------------------------------------------------------------------------------

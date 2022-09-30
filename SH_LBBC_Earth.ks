@@ -10,9 +10,13 @@ global log is "sh_lbbc_earth_log.csv".
 global pad is latlng(25.9669968, -97.1416771). // Tower Catch point - BC OLIT 1
 global degPadEnt is 262.
 
+global mGravTurn is 500.
 global kNThrLaunch is 68000.
 global pctMinProp is 16.
-global secEngSpl is 3.
+
+global mAPTrg is 500000.
+global mPETrg is 200000.
+global degPitTrg is 0.
 
 global arrGridFins is list().
 
@@ -171,7 +175,8 @@ function write_console { // Write unchanging display elements and header line of
 
 function write_screen { // Write dynamic display elements and write telemetry to logfile
 	parameter phase.
-	print phase + "        " at (14, 0).
+	parameter writelog.
+	print phase + "                " at (14, 0).
 	// print "----------------------------".
 	print round(SHIP:altitude, 0) + "    " at (14, 2).
 	// print "----------------------------".
@@ -191,22 +196,24 @@ function write_screen { // Write dynamic display elements and write telemetry to
 	print round(throttle * 100, 2) + "    " at (14, 17).
 	print round(mpsVrtTrg, 0) + "    " at (14, 18).
 
-	local logline is time:seconds + ",".
-	set logline to logline + phase + ",".
-	set logline to logline + round(SHIP:altitude, 0) + ",".
-	set logline to logline + round(SHIP:groundspeed, 0) + ",".
-	set logline to logline + round(SHIP:verticalspeed, 0) + ",".
-	set logline to logline + round(SHIP:airspeed, 0) + ",".
-	set logline to logline + round(mPad, 0) + ",".
-	set logline to logline + round(mSrf, 0) + ",".
-	set logline to logline + round(degBerPad, 2) + ",".
-	set logline to logline + round(degVector, 2) + ",".
-	set logline to logline + round(degAttack, 2) + ",".
-	set logline to logline + round(degVecTrg, 2) + ",".
-	set logline to logline + round(pctProp, 0) + ",".
-	set logline to logline + round(throttle * 100, 2) + ",".
-	set logline to logline + round(mpsVrtTrg, 0) + ",".
-	log logline to log.
+	if writelog = true {
+		local logline is time:seconds + ",".
+		set logline to logline + phase + ",".
+		set logline to logline + round(SHIP:altitude, 0) + ",".
+		set logline to logline + round(SHIP:groundspeed, 0) + ",".
+		set logline to logline + round(SHIP:verticalspeed, 0) + ",".
+		set logline to logline + round(SHIP:airspeed, 0) + ",".
+		set logline to logline + round(mPad, 0) + ",".
+		set logline to logline + round(mSrf, 0) + ",".
+		set logline to logline + round(degBerPad, 2) + ",".
+		set logline to logline + round(degVector, 2) + ",".
+		set logline to logline + round(degAttack, 2) + ",".
+		set logline to logline + round(degVecTrg, 2) + ",".
+		set logline to logline + round(pctProp, 0) + ",".
+		set logline to logline + round(throttle * 100, 2) + ",".
+		set logline to logline + round(mpsVrtTrg, 0) + ",".
+		log logline to log.
+	}
 }
 
 function relative_bearing { // Returns the delta angle between two supplied headings
@@ -271,32 +278,44 @@ mdMidEngs:doaction("activate engine", true).
 wait 0.1.
 mdCntEngs:doaction("activate engine", true).
 
+set target to moon.
+
+write_console().
+
 //---------------------------------------------------------------------------------------------------------------------
 // #endregion
 //---------------------------------------------------------------------------------------------------------------------
 // #region FLIGHT
 //---------------------------------------------------------------------------------------------------------------------
 
-write_console().
-
 // Stage: PRE-LAUNCH
-until mdAllEngs:getfield("thrust") > 0 {
-	write_screen("Pre-launch").
+until abs(SHIP:orbit:lan - target:orbit:lan) < 0.01 {
+	write_screen("Pre-launch: - " + round(abs(SHIP:orbit:lan - target:orbit:lan), 4), false).
 }
 
 // Stage: IGNITION
+lock throttle to 1.
 if mdQDSH:hasevent("Open") { mdQDSH:doevent("Open"). }
 if mdQDSS:hasevent("Open") { mdQDSS:doevent("Open"). }
 
 until mdAllEngs:getfield("thrust") > kNThrLaunch {
-	write_screen("Ignition").
+	write_screen("Ignition", false).
 }
 
-// Stage: ASCENT
+// Stage: LIFT OFF
+lock steering to up.
 mdOLPClamp:doaction("Release clamp", true).
 
+until SHIP:altitude > mGravTurn {
+	write_screen("Lift off", true).
+}
+
+// Stage: GRAVITY TURN
+lock degPitTrg to (1 - sqrt((SHIP:apoapsis - mGravTurn) / mPETrg)) * 90.
+lock steering to lookDirUp(heading(90, degPitTrg):vector, up:vector).
+
 until pctProp < pctMinProp {
-	write_screen("Ascent").
+	write_screen("Gravity turn", true).
 }
 
 // Stage: STAGE
@@ -310,7 +329,7 @@ mdDecouple:doevent("decouple").
 
 local timeStage is time:seconds + 120.
 until time:seconds > timeStage {
-	write_screen("Stage").
+	write_screen("Stage", true).
 }
 
 

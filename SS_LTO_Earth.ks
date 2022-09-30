@@ -246,7 +246,7 @@ function get_roll { // Get current roll
 }
 
 function calculate_tvspd {
-	local tEnd is SHIP:mass / (constant:e ^ ((mpsHrzTrg - SHIP:orbit:surface:mag) - mpsExhVel)). // Calculate end mass (t)
+	local tEnd is SHIP:mass / (constant:e ^ ((mpsHrzTrg - SHIP:velocity:orbit:mag) - mpsExhVel)). // Calculate end mass (t)
 	local sToTrg is (SHIP:mass - tEnd) / tpsMLRate. // Calculate time to end mass (s)
 	return (2 * (mPETrg - SHIP:altitude)) / sToTrg.
 }

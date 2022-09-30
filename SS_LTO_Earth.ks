@@ -27,7 +27,7 @@ global degPitTrg is 0.
 global degYawTrg is 0.
 
 // PID controller for pitch correction
-global pidPit is pidLoop(1, 0.1, 2.5).
+global pidPit is pidLoop(1, 0.1, 2.5, -10, 10).
 set pidPit:setpoint to 0.
 
 global onBooster is true.
@@ -246,7 +246,7 @@ function get_roll { // Get current roll
 }
 
 function calculate_tvspd {
-	local tEnd is SHIP:mass / (constant:e ^ ((mpsHrzTrg - SHIP:velocity:orbit:mag) - mpsExhVel)). // Calculate end mass (t)
+	local tEnd is SHIP:mass / (constant:e ^ ((mpsHrzTrg - SHIP:velocity:orbit:mag) / mpsExhVel)). // Calculate end mass (t)
 	local sToTrg is (SHIP:mass - tEnd) / tpsMLRate. // Calculate time to end mass (s)
 	return (2 * (mPETrg - SHIP:altitude)) / sToTrg.
 }

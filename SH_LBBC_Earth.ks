@@ -311,7 +311,7 @@ until SHIP:altitude > mGravTurn {
 }
 
 // Stage: GRAVITY TURN
-lock degPitTrg to (1 - sqrt((SHIP:apoapsis - mGravTurn) / mPETrg)) * 90.
+lock degPitTrg to (1 - (sqrt((SHIP:apoapsis - mGravTurn) / mPETrg) * 1.05)) * 90.
 lock steering to lookDirUp(heading(90, degPitTrg):vector, up:vector).
 
 until pctProp < pctMinProp {

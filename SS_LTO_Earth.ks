@@ -27,7 +27,7 @@ global degPitTrg is 0.
 global degYawTrg is 0.
 
 // PID controller for pitch correction
-global pidPit is pidLoop(1, 0.1, 2.5, -10, 10).
+global pidPit is pidLoop(0.5, 0.1, 5, -5, 20).
 set pidPit:setpoint to 0.
 
 global onBooster is true.
@@ -106,7 +106,7 @@ if defined ptFlapAR {
 //---------------------------------------------------------------------------------------------------------------------
 
 lock kpaDynPrs to SHIP:q * constant:atmtokpa.
-lock degPitAct to get_pit(srfprograde).
+lock degPitAct to get_pit(prograde).
 lock degYawAct to get_yaw(SHIP:up).
 lock degRolAct to get_roll(SHIP:up).
 if defined rsCMCH4 {
@@ -245,10 +245,10 @@ function get_roll { // Get current roll
 	return 0 - arcTan2(-vDot(fcgShip:starvector, rDirection:forevector), vDot(fcgShip:topvector, rDirection:forevector)).
 }
 
-function calculate_tvspd {
+function calculate_tvspd { // Calculate target vertical speed (m/s)
 	local tEnd is SHIP:mass / (constant:e ^ ((mpsHrzTrg - SHIP:velocity:orbit:mag) / mpsExhVel)). // Calculate end mass (t)
 	local sToTrg is (SHIP:mass - tEnd) / tpsMLRate. // Calculate time to end mass (s)
-	return (2 * (mPETrg - SHIP:altitude)) / sToTrg.
+	return (2 * (mPETrg - SHIP:altitude)) / sToTrg. // Assume linear reduction to zero at T0
 }
 
 //---------------------------------------------------------------------------------------------------------------------
@@ -331,10 +331,22 @@ until time:seconds > timeStage {
 	write_screen("Stage", true).
 }
 
-// Stage: ORBITAL INSERTION
-lock steering to lookDirUp(heading(90, degPitTrg):vector, up:vector).
+// Stage: GRAVITY TURN
+lock steering to lookDirUp(heading(90, vang(prograde:vector, vxcl(up:vector, prograde:vector))):vector, up:vector).
+set mpsVrtTrg to calculate_tvspd().
 
-until arrRaptorVac[0]:getmodule("ModuleEnginesRF"):getfield("thrust") = 0 {
+until mpsVrtTrg > SHIP:verticalspeed {
+	write_screen("Gravity Turn", true).
+	set navMode to "Surface".
+	set mpsVrtTrg to calculate_tvspd().
+	set degPitTrg to pidPit:update(time:seconds, SHIP:verticalspeed - mpsVrtTrg).
+}
+
+
+// Stage: ORBITAL INSERTION
+lock steering to lookDirUp(heading(90, degPitTrg + vang(prograde:vector, vxcl(up:vector, prograde:vector))):vector, up:vector).
+
+until SHIP:orbit:apoapsis > mAPTrg {
 	write_screen("Orbital Insertion", true).
 	set mpsVrtTrg to calculate_tvspd().
 	set degPitTrg to pidPit:update(time:seconds, SHIP:verticalspeed - mpsVrtTrg).

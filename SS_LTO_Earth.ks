@@ -25,12 +25,14 @@ global mpsHrzTrg is sqrt(2 * cnsGME * mAPRad / (mPERad * (mAPRad + mPERad))). //
 global mpsVrtTrg is 0. // Vertical speed target
 global sToTrgVel is 0. // Seconds to target velocity
 global sToZoVrDl is 0. // Seconds to zero vertical speed delta
+global sToOrbIns is 10.
+
 global degPitTrg is 10.
 global degYawTrg is 0.
 
-// PID controller for pitch correction
-global pidPit is pidLoop(2, 1, 5, -5, 20).
-set pidPit:setpoint to 0.
+// PID controller
+global pidYaw is pidLoop(0.5, 0.001, 0.001, -1, 1).
+set pidYaw:setpoint to 0.
 
 global trkStpTim is list(0, 0, 0, 0, 0). // Track time per step
 global trkVrtDlt is list(0, 0, 0, 0, 0). // Track vertical speed delta per step
@@ -110,8 +112,9 @@ if defined ptFlapAR {
 // #region LOCKS
 //---------------------------------------------------------------------------------------------------------------------
 
+lock degTarDlt to SHIP:orbit:lan - target:orbit:lan.
 lock degPitAct to get_pit(prograde).
-lock degYawAct to get_yaw(SHIP:up).
+lock degYawAct to get_yaw(prograde).
 lock mpsVrtDlt to SHIP:verticalspeed - mpsVrtTrg. // Delta between target vertical speed and actual vertical speed
 if defined rsCMCH4 {
 	lock klProp to rsHDCH4:amount + rsCMCH4:amount + rsBDCH4:amount.
@@ -141,11 +144,14 @@ function write_console { // Write unchanging display elements and header line of
 	print "Target pitch:            deg" at (0, 11).
 	print "Actual pitch:            deg" at (0, 12).
 	print "Time to TVel:              s" at (0, 13).
-	print "Time to 0 Dt:              s" at (0, 14).
-	print "----------------------------" at (0, 15).
-	print "Ship mass:                 t" at (0, 16).
-	print "Propellant:                l" at (0, 17).
-	print "Throttle:                  %" at (0, 18).
+	print "----------------------------" at (0, 14).
+	print "Incl delta:              deg" at (0, 15).
+	print "Target yaw:              deg" at (0, 16).
+	print "Actual yaw:              deg" at (0, 17).
+	print "----------------------------" at (0, 18).
+	print "Ship mass:                 t" at (0, 19).
+	print "Propellant:                l" at (0, 20).
+	print "Throttle:                  %" at (0, 21).
 
 	deletePath(log).
 	local logline is "MET,".
@@ -159,6 +165,8 @@ function write_console { // Write unchanging display elements and header line of
 	set logline to logline + "VSpd delta,".
 	set logline to logline + "Target pitch,".
 	set logline to logline + "Actual pitch,".
+	set logline to logline + "Time to TVel,".
+	set logline to logline + "Incl delta,".
 	set logline to logline + "Target yaw,".
 	set logline to logline + "Actual yaw,".
 	set logline to logline + "Ship mass,".
@@ -184,14 +192,17 @@ function write_screen { // Write dynamic display elements and write telemetry to
 	print round(degPitTrg, 2) + "    " at (14, 11).
 	print round(degPitAct, 2) + "    " at (14, 12).
 	print round(sToTrgVel, 2) + "    " at (14, 13).
-	print round(sToZoVrDl, 2) + "    " at (14, 14).
 	// print "----------------------------".
-	print round(SHIP:mass, 2) + "    " at (14, 16).
-	print round(klProp, 0) + "    " at (14, 17).
-	print round(throttle * 100, 2) + "    " at (14, 18).
+	print round(degTarDlt, 4) + "    " at (14, 15).
+	print round(degYawTrg, 2) + "    " at (14, 16).
+	print round(degYawAct, 2) + "    " at (14, 17).
+	// print "----------------------------".
+	print round(SHIP:mass, 2) + "    " at (14, 19).
+	print round(klProp, 0) + "    " at (14, 20).
+	print round(throttle * 100, 2) + "    " at (14, 21).
 
 	if writelog = true {
-		local logline is missionTime + ",".
+		local logline is round(missionTime, 1) + ",".
 		set logline to logline + phase + ",".
 		set logline to logline + round(SHIP:altitude, 0) + ",".
 		set logline to logline + round(SHIP:orbit:apoapsis, 0) + ",".
@@ -202,6 +213,8 @@ function write_screen { // Write dynamic display elements and write telemetry to
 		set logline to logline + round(mpsVrtDlt, 0) + ",".
 		set logline to logline + round(degPitTrg, 2) + ",".
 		set logline to logline + round(degPitAct, 2) + ",".
+		set logline to logline + round(sToTrgVel, 2) + ",".
+		set logline to logline + round(degTarDlt, 4) + ",".
 		set logline to logline + round(degYawTrg, 2) + ",".
 		set logline to logline + round(degYawAct, 2) + ",".
 		set logline to logline + round(SHIP:mass, 2) + ",".
@@ -233,6 +246,15 @@ function get_yaw { // Get current yaw
 	if dirRol > 0 { return degRol. } else { return (0 - degRol). }
 }
 
+function heading_of_vector { // heading_of_vector returns the heading of the vector (number range 0 to 360)
+	parameter vecT.
+	local east IS VCRS(SHIP:UP:VECTOR, SHIP:NORTH:VECTOR).
+	local trig_x IS VDOT(SHIP:NORTH:VECTOR, vecT).
+	local trig_y IS VDOT(east, vecT).
+	local result IS ARCTAN2(trig_y, trig_x).
+	if result < 0 { return 360 + result. } else { return result. }
+}
+
 function calculate_tvspd { // Calculate target vertical speed (m/s)
 	local tEnd is SHIP:mass / (constant:e ^ ((mpsHrzTrg - SHIP:velocity:orbit:mag) / mpsExhVel)). // Calculate end mass (t)
 	set sToTrgVel to (SHIP:mass - tEnd) / tpsMLRate. // Calculate time to end mass (s)
@@ -246,14 +268,26 @@ function calculate_pitch { // Adjust pitch by increments depending upon when ver
 	trkVrtDlt:add(mpsVrtDlt). // track how delta is changing
 	local chgInDlt is trkVrtDlt[0] - trkVrtDlt[4].
 	local chgInTim is trkStpTim[4] - trkStpTim[0].
-	if chgInDlt < 0 {
-		return degPitTrg.
-	} else {
-		set sToZoVrDl to trkVrtDlt[4] / (chgInDlt / chgInTim).
-		if sToZoVrDl > sToTrgVel {
-			return degPitTrg - 0.02.
-		} else {
-			return degPitTrg + 0.02.
+	if sToTrgVel < sToOrbIns { // Orbital instertion
+		if (chgInDlt < 0 and mpsVrtDlt > 0) or (chgInDlt > 0 and mpsVrtDlt < 0) { // Delta is increasing - do something
+			if mpsVrtDlt > 0 {
+				return degPitTrg - 0.2.
+			} else {
+				return degPitTrg + 0.2.
+			}
+		} else { // Delta is decreasing - do nothing
+			return degPitTrg.
+		}
+	} else { // Ascent
+		if chgInDlt < 0 { // Delta is increasing - do nothing
+			return degPitTrg.
+		} else { // Aim for zero delta at sToOrbIns before orbit
+			set sToZoVrDl to mpsVrtDlt / (chgInDlt / chgInTim).
+			if sToZoVrDl > (sToTrgVel - sToOrbIns) {
+				return degPitTrg - 0.02.
+			} else {
+				return degPitTrg + 0.02.
+			}
 		}
 	}
 }
@@ -332,29 +366,84 @@ until onBooster = false {
 for ptRaptorSL in arrRaptorSL { ptRaptorSL:activate. }
 for ptRaptorVac in arrRaptorVac { ptRaptorVac:activate. }
 lock throttle to 1.
-
 local timeStage is time:seconds + 4.
+
 until time:seconds > timeStage {
 	write_screen("Stage", true).
 }
 
-// // Stage: GRAVITY TURN
-// lock steering to lookDirUp(heading(90, degPitTrg + vang(prograde:vector, vxcl(up:vector, prograde:vector))):vector, up:vector).
+// Stage: ASCENT
+lock steering to lookDirUp(heading(heading_of_vector(prograde:vector) - degYawTrg, degPitTrg + vang(prograde:vector, vxcl(up:vector, prograde:vector))):vector, up:vector).
+set mpsVrtTrg to calculate_tvspd().
 
-// until SHIP:verticalspeed < mpsVrtTrg {
-// 	write_screen("Gravity turn", true).
-// 	set navMode to "Surface".
-// 	set mpsVrtTrg to calculate_tvspd().
-// 	set degPitTrg to 10.
-// }
-
-// Stage: ORBITAL INSERTION
-lock steering to lookDirUp(heading(90, degPitTrg + vang(prograde:vector, vxcl(up:vector, prograde:vector))):vector, up:vector).
-
-until SHIP:orbit:apoapsis > mAPTrg {
-	write_screen("Orbital Insertion", true).
+until sToTrgVel < sToOrbIns {
+	write_screen("Ascent", true).
 	set mpsVrtTrg to calculate_tvspd().
 	set degPitTrg to calculate_pitch().
+	set degYawTrg to pidYaw:update(time:seconds, degTarDlt).
+}
+
+// Stage: ORBITAL INSERTION
+
+until SHIP:orbit:apoapsis > (mAPTrg * 0.9) {
+	write_screen("Orbital insertion", true).
+	set mpsVrtTrg to calculate_tvspd().
+	set degPitTrg to calculate_pitch().
+	set degYawTrg to pidYaw:update(time:seconds, degTarDlt).
+}
+
+// Stage: TRIM
+set degYawTrg to 0.
+set degPitTrg to 0.
+lock throttle to 0.4.
+
+until SHIP:orbit:apoapsis > (mAPTrg * 0.97) {
+	write_screen("Trim        ", true).
+}
+
+lock throttle to 0.
+rcs on.
+set SHIP:control:fore to 1.
+
+until SHIP:orbit:apoapsis > (mAPTrg * 0.999) {
+	write_screen("Trim", true).
+	set SHIP:control:fore to max(1, (mAPTrg - SHIP:orbit:apoapsis) / (mAPTrg * 0.97)).
+}
+
+// Stage: COAST TO APOGEE
+set SHIP:control:fore to 0.
+rcs off.
+unlock steering.
+sas on.
+set sasmode to "prograde".
+
+until SHIP:orbit:eta:apoapsis < 1 {
+	write_screen("Coast to Apogee", true).
+	set sasmode to "prograde".
+}
+
+// Stage: CIRCULARISING
+sas off.
+lock steering to prograde.
+lock throttle to 0.
+rcs on.
+local mOrbApPe is SHIP:orbit:apoapsis * 2.
+
+until (SHIP:orbit:apoapsis + SHIP:orbit:periapsis) > (mOrbApPe * 0.95) {
+	write_screen("Circularising", true).
+}
+
+// Stage: ORBIT ATTAINED
+lock throttle to 0.
+unlock steering.
+rcs off.
+sas on.
+set sasmode to "prograde".
+local timeWait is time:seconds + 4.
+
+until time:seconds > timeWait {
+	write_screen("Orbit attained", true).
+	set sasmode to "prograde".
 }
 
 //---------------------------------------------------------------------------------------------------------------------

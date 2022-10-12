@@ -155,7 +155,7 @@ function write_console { // Write unchanging display elements and header line of
 	print "Target VSpd:             mps" at (0, 18).
 
 	deletePath(log).
-	local logline is "Time,".
+	local logline is "MET,".
 	set logline to logline + "Phase,".
 	set logline to logline + "Altitude,".
 	set logline to logline + "Hrz speed,".
@@ -197,7 +197,7 @@ function write_screen { // Write dynamic display elements and write telemetry to
 	print round(mpsVrtTrg, 0) + "    " at (14, 18).
 
 	if writelog = true {
-		local logline is time:seconds + ",".
+		local logline is round(missionTime, 1) + ",".
 		set logline to logline + phase + ",".
 		set logline to logline + round(SHIP:altitude, 0) + ",".
 		set logline to logline + round(SHIP:groundspeed, 0) + ",".
@@ -289,7 +289,7 @@ write_console().
 //---------------------------------------------------------------------------------------------------------------------
 
 // Stage: PRE-LAUNCH
-until abs(SHIP:orbit:lan - target:orbit:lan) < 0.01 {
+until abs(SHIP:orbit:lan - target:orbit:lan) < 0.3 {
 	write_screen("Pre-launch: - " + round(abs(SHIP:orbit:lan - target:orbit:lan), 4), false).
 }
 

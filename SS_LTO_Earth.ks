@@ -348,92 +348,100 @@ write_console().
 // #region FLIGHT
 //---------------------------------------------------------------------------------------------------------------------
 
-// Stage: PRE-LAUNCH
-until SHIP:verticalspeed > 0.1 {
-	write_screen("Pre-launch", false).
-}
+if false {
+	// Stage: PRE-LAUNCH
+	until SHIP:verticalspeed > 0.1 {
+		write_screen("Pre-launch", false).
+	}
 
-// Stage: ON BOOSTER
-until onBooster = false {
-	write_screen("On Booster", true).
-	set onBooster to false.
-	for pt in SHIP:parts {
-		if pt:name:startswith("SEP.B4.INTER") { set onBooster to true. }
+	// Stage: ON BOOSTER
+	until onBooster = false {
+		write_screen("On Booster", true).
+		set onBooster to false.
+		for pt in SHIP:parts {
+			if pt:name:startswith("SEP.B4.INTER") { set onBooster to true. }
+		}
+	}
+
+	// Stage: STAGE
+	for ptRaptorSL in arrRaptorSL { ptRaptorSL:activate. }
+	for ptRaptorVac in arrRaptorVac { ptRaptorVac:activate. }
+	lock throttle to 1.
+	local timeStage is time:seconds + 4.
+
+	until time:seconds > timeStage {
+		write_screen("Stage", true).
+	}
+
+	// Stage: ASCENT
+	lock steering to lookDirUp(heading(heading_of_vector(prograde:vector) - degYawTrg, degPitTrg + vang(prograde:vector, vxcl(up:vector, prograde:vector))):vector, up:vector).
+	set mpsVrtTrg to calculate_tvspd().
+
+	until sToTrgVel < sToOrbIns {
+		write_screen("Ascent", true).
+		set mpsVrtTrg to calculate_tvspd().
+		set degPitTrg to calculate_pitch().
+		set degYawTrg to pidYaw:update(time:seconds, degTarDlt).
+	}
+
+	// Stage: ORBITAL INSERTION
+
+	until SHIP:orbit:apoapsis > (mAPTrg * 0.9) {
+		write_screen("Orbital insertion", true).
+		set mpsVrtTrg to calculate_tvspd().
+		set degPitTrg to calculate_pitch().
+		set degYawTrg to pidYaw:update(time:seconds, degTarDlt).
+	}
+
+	// Stage: TRIM
+	set degYawTrg to 0.
+	set degPitTrg to 0.
+	lock throttle to 0.4.
+
+	until SHIP:orbit:apoapsis > (mAPTrg * 0.97) {
+		write_screen("Trim        ", true).
+	}
+
+	lock throttle to 0.
+	rcs on.
+	set SHIP:control:fore to 1.
+
+	until SHIP:orbit:apoapsis > (mAPTrg * 0.999) {
+		write_screen("Trim", true).
+		set SHIP:control:fore to max(1, (mAPTrg - SHIP:orbit:apoapsis) / (mAPTrg * 0.97)).
 	}
 }
 
-// Stage: STAGE
-for ptRaptorSL in arrRaptorSL { ptRaptorSL:activate. }
-for ptRaptorVac in arrRaptorVac { ptRaptorVac:activate. }
-lock throttle to 1.
-local timeStage is time:seconds + 4.
-
-until time:seconds > timeStage {
-	write_screen("Stage", true).
-}
-
-// Stage: ASCENT
-lock steering to lookDirUp(heading(heading_of_vector(prograde:vector) - degYawTrg, degPitTrg + vang(prograde:vector, vxcl(up:vector, prograde:vector))):vector, up:vector).
-set mpsVrtTrg to calculate_tvspd().
-
-until sToTrgVel < sToOrbIns {
-	write_screen("Ascent", true).
-	set mpsVrtTrg to calculate_tvspd().
-	set degPitTrg to calculate_pitch().
-	set degYawTrg to pidYaw:update(time:seconds, degTarDlt).
-}
-
-// Stage: ORBITAL INSERTION
-
-until SHIP:orbit:apoapsis > (mAPTrg * 0.9) {
-	write_screen("Orbital insertion", true).
-	set mpsVrtTrg to calculate_tvspd().
-	set degPitTrg to calculate_pitch().
-	set degYawTrg to pidYaw:update(time:seconds, degTarDlt).
-}
-
-// Stage: TRIM
-set degYawTrg to 0.
-set degPitTrg to 0.
-lock throttle to 0.4.
-
-until SHIP:orbit:apoapsis > (mAPTrg * 0.97) {
-	write_screen("Trim        ", true).
-}
-
-lock throttle to 0.
-rcs on.
-set SHIP:control:fore to 1.
-
-until SHIP:orbit:apoapsis > (mAPTrg * 0.999) {
-	write_screen("Trim", true).
-	set SHIP:control:fore to max(1, (mAPTrg - SHIP:orbit:apoapsis) / (mAPTrg * 0.97)).
-}
-
 // Stage: COAST TO APOGEE
+for ptRaptorSL in arrRaptorSL { ptRaptorSL:shutdown. }
+for ptRaptorVac in arrRaptorVac { ptRaptorVac:shutdown. }
 set SHIP:control:fore to 0.
 rcs off.
 unlock steering.
 sas on.
 set sasmode to "prograde".
 
-until SHIP:orbit:eta:apoapsis < 1 {
+until SHIP:orbit:eta:apoapsis < 4 {
 	write_screen("Coast to Apogee", true).
 	set sasmode to "prograde".
 }
 
 // Stage: CIRCULARISING
+for ptRaptorSL in arrRaptorSL { ptRaptorSL:activate. }
+for ptRaptorVac in arrRaptorVac { ptRaptorVac:activate. }
 sas off.
 lock steering to prograde.
-lock throttle to 0.
+lock throttle to 1.
 rcs on.
 local mOrbApPe is SHIP:orbit:apoapsis * 2.
 
-until (SHIP:orbit:apoapsis + SHIP:orbit:periapsis) > (mOrbApPe * 0.95) {
+until (SHIP:orbit:apoapsis + SHIP:orbit:periapsis) > (mOrbApPe * 0.99) {
 	write_screen("Circularising", true).
 }
 
 // Stage: ORBIT ATTAINED
+for ptRaptorSL in arrRaptorSL { ptRaptorSL:shutdown. }
+for ptRaptorVac in arrRaptorVac { ptRaptorVac:shutdown. }
 lock throttle to 0.
 unlock steering.
 rcs off.

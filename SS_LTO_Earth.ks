@@ -10,6 +10,8 @@ global log is "ss_lto_earth_log.csv".
 global arrSSFlaps is list().
 global arrRaptorVac is list().
 global arrRaptorSL is list().
+global arrSolarPanels is list().
+global arrSPModules is list().
 
 // Set target orbit values
 global mAPTrg is 500000. // Target apogee
@@ -57,6 +59,7 @@ for pt in SHIP:parts {
 	if pt:name:startswith("SEP.S20.AFT.RIGHT") { set ptFlapAR to pt. }
 	if pt:name:startswith("SEP.RAPTOR.VAC") { arrRaptorVac:add(pt). }
 	if pt:name:startswith("SEP.RAPTOR.SL") { arrRaptorSL:add(pt). }
+	if pt:name:startswith("nfs-panel-deploying-blanket-arm-1") { arrSolarPanels:add(pt). }
 }
 
 // Bind to resources within StarShip Header
@@ -106,13 +109,22 @@ if defined ptFlapAR {
 	arrSSFlaps:add(mdFlapARCS).
 }
 
+// Bind to modules within solar panels
+for ptSolarPanel in arrSolarPanels {
+	arrSPModules:add(ptSolarPanel:getmodule("ModuleDeployableSolarPanel")).
+}
+
 //---------------------------------------------------------------------------------------------------------------------
 // #endregion
 //---------------------------------------------------------------------------------------------------------------------
 // #region LOCKS
 //---------------------------------------------------------------------------------------------------------------------
 
-lock degTarDlt to SHIP:orbit:lan - target:orbit:lan.
+if hasTarget {
+	lock degTarDlt to SHIP:orbit:lan - target:orbit:lan.
+}	else {
+	lock degTarDlt to 0.
+}
 lock degPitAct to get_pit(prograde).
 lock degYawAct to get_yaw(prograde).
 lock mpsVrtDlt to SHIP:verticalspeed - mpsVrtTrg. // Delta between target vertical speed and actual vertical speed
@@ -298,6 +310,9 @@ function calculate_pitch { // Adjust pitch by increments depending upon when ver
 // #region INITIALISE
 //---------------------------------------------------------------------------------------------------------------------
 
+// Retract Solar Panels
+for mdSP in arrSPModules { mdSP:doaction("retract solar panel", true). }
+
 // Enable RCS modules
 mdSSCMRCS:setfield("rcs", true).
 mdSSBDRCS:setfield("rcs", true).
@@ -348,73 +363,71 @@ write_console().
 // #region FLIGHT
 //---------------------------------------------------------------------------------------------------------------------
 
-if false {
-	// Stage: PRE-LAUNCH
-	until SHIP:verticalspeed > 0.1 {
-		write_screen("Pre-launch", false).
+// Stage: PRE-LAUNCH
+until SHIP:verticalspeed > 0.1 {
+	write_screen("Pre-launch", false).
+}
+
+// Stage: ON BOOSTER
+until onBooster = false {
+	write_screen("On Booster", true).
+	set onBooster to false.
+	for pt in SHIP:parts {
+		if pt:name:startswith("SEP.B4.INTER") { set onBooster to true. }
 	}
+}
 
-	// Stage: ON BOOSTER
-	until onBooster = false {
-		write_screen("On Booster", true).
-		set onBooster to false.
-		for pt in SHIP:parts {
-			if pt:name:startswith("SEP.B4.INTER") { set onBooster to true. }
-		}
-	}
+// Stage: STAGE
+for ptRaptorSL in arrRaptorSL { ptRaptorSL:activate. }
+for ptRaptorVac in arrRaptorVac { ptRaptorVac:activate. }
+lock throttle to 1.
+local timeStage is time:seconds + 4.
 
-	// Stage: STAGE
-	for ptRaptorSL in arrRaptorSL { ptRaptorSL:activate. }
-	for ptRaptorVac in arrRaptorVac { ptRaptorVac:activate. }
-	lock throttle to 1.
-	local timeStage is time:seconds + 4.
+until time:seconds > timeStage {
+	write_screen("Stage", true).
+}
 
-	until time:seconds > timeStage {
-		write_screen("Stage", true).
-	}
+// Stage: ASCENT
+lock steering to lookDirUp(heading(heading_of_vector(prograde:vector) - degYawTrg, degPitTrg + vang(prograde:vector, vxcl(up:vector, prograde:vector))):vector, up:vector).
+set mpsVrtTrg to calculate_tvspd().
 
-	// Stage: ASCENT
-	lock steering to lookDirUp(heading(heading_of_vector(prograde:vector) - degYawTrg, degPitTrg + vang(prograde:vector, vxcl(up:vector, prograde:vector))):vector, up:vector).
+until sToTrgVel < sToOrbIns {
+	write_screen("Ascent", true).
 	set mpsVrtTrg to calculate_tvspd().
+	set degPitTrg to calculate_pitch().
+	set degYawTrg to pidYaw:update(time:seconds, degTarDlt).
+}
 
-	until sToTrgVel < sToOrbIns {
-		write_screen("Ascent", true).
-		set mpsVrtTrg to calculate_tvspd().
-		set degPitTrg to calculate_pitch().
-		set degYawTrg to pidYaw:update(time:seconds, degTarDlt).
-	}
+// Stage: ORBITAL INSERTION
+until SHIP:orbit:apoapsis > (mAPTrg * 0.9) {
+	write_screen("Orbital insertion", true).
+	set mpsVrtTrg to calculate_tvspd().
+	set degPitTrg to calculate_pitch().
+	set degYawTrg to pidYaw:update(time:seconds, degTarDlt).
+}
 
-	// Stage: ORBITAL INSERTION
+// Stage: TRIM
+set degYawTrg to 0.
+set degPitTrg to 0.
+lock throttle to 0.4.
 
-	until SHIP:orbit:apoapsis > (mAPTrg * 0.9) {
-		write_screen("Orbital insertion", true).
-		set mpsVrtTrg to calculate_tvspd().
-		set degPitTrg to calculate_pitch().
-		set degYawTrg to pidYaw:update(time:seconds, degTarDlt).
-	}
+until SHIP:orbit:apoapsis > (mAPTrg * 0.97) {
+	write_screen("Trim        ", true).
+}
 
-	// Stage: TRIM
-	set degYawTrg to 0.
-	set degPitTrg to 0.
-	lock throttle to 0.4.
+lock throttle to 0.
+rcs on.
+set SHIP:control:fore to 1.
 
-	until SHIP:orbit:apoapsis > (mAPTrg * 0.97) {
-		write_screen("Trim        ", true).
-	}
-
-	lock throttle to 0.
-	rcs on.
-	set SHIP:control:fore to 1.
-
-	until SHIP:orbit:apoapsis > (mAPTrg * 0.999) {
-		write_screen("Trim", true).
-		set SHIP:control:fore to max(1, (mAPTrg - SHIP:orbit:apoapsis) / (mAPTrg * 0.97)).
-	}
+until SHIP:orbit:apoapsis > (mAPTrg * 0.999) {
+	write_screen("Trim", true).
+	set SHIP:control:fore to max(1, (mAPTrg - SHIP:orbit:apoapsis) / (mAPTrg * 0.97)).
 }
 
 // Stage: COAST TO APOGEE
 for ptRaptorSL in arrRaptorSL { ptRaptorSL:shutdown. }
 for ptRaptorVac in arrRaptorVac { ptRaptorVac:shutdown. }
+for mdSP in arrSPModules { mdSP:doaction("extend solar panel", true). }
 set SHIP:control:fore to 0.
 rcs off.
 unlock steering.
@@ -433,9 +446,8 @@ sas off.
 lock steering to prograde.
 lock throttle to 1.
 rcs on.
-local mOrbApPe is SHIP:orbit:apoapsis * 2.
 
-until (SHIP:orbit:apoapsis + SHIP:orbit:periapsis) > (mOrbApPe * 0.99) {
+until (SHIP:orbit:apoapsis + SHIP:orbit:periapsis) > (mAPTrg * 1.99) {
 	write_screen("Circularising", true).
 }
 

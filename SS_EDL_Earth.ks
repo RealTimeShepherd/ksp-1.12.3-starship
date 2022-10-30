@@ -581,7 +581,6 @@ lock mpsVrtTrg to (mAltTrg - SHIP:altitude) / 5.
 
 until SHIP:verticalspeed > mpsVrtTrg {
 	write_screen("Landing Burn", true).
-	print "mpsVrtTrg:    " + round(mpsVrtTrg, 2) + "    " at(0, 21).
 }
 
 // Stage: BALANCE THROTTLE

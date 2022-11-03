@@ -6,10 +6,18 @@ parameter launchTrg.
 //---------------------------------------------------------------------------------------------------------------------
 
 // Logfile
-global log is "sh_lbbc_earth_log.csv".
+global log is "Telemetry/sh_lbbc_earth_log.csv".
 
 global pad is latlng(25.9669968, -97.1416771). // Tower Catch point - BC OLIT 1
 global degPadEnt is 262. // Heading when entering chopsticks
+global mTowerHgt is 235. // Tower height in metres
+global mltOffset is 1.5. // Multiplier for calculating offset target
+global mAltWP1 is 600. // Waypoints - ship will travel through these altitudes
+global mAltWP2 is 300.
+global mAltWP4 is 200.5. // Tower Catch altitude - BC OLIT 1
+global mAltAP1 is 300. // Aim points - ship will aim at these altitudes
+global mAltAP2 is 230.
+global mAltAP3 is 200.
 
 global mGravTurn is 500. // Altitude to start gravity turn
 global kNThrLaunch is 68000. // Kn Thrust to trigger launch clamp release
@@ -17,9 +25,11 @@ global pctMinProp is 18. // Percent of propellant remaining to trigger MECO & st
 global mAeroGuid is 60000. // Altitude to switch to aerodynamic guidance
 
 global mPETrg is 200000. // Altitude of target perigee
-global mVesDst is 2000000. // Distance of target vessel to trigger launch
+global kmVesDst is 1150. // Distance of target vessel to trigger launch
+global degMaxInc is 2. // Maximum inclination delta to trigger launch
 
-global mAltAP1 is 300. // Aim points - ship will aim at these altitudes
+global mOvrSht is 2000. // Overshoot targeting of tower in metres
+global mLdgBrn is 35000. // Altitude to start landing burn
 global degMaxAeD is 2. // Maximum deflection during aero portion of landing burn
 global degMaxThD is 5. // Maximum deflection during thrust portion of landing burn
 global degMaxTBD is 10. // Maximum deflection during throttle balancing portion of descent
@@ -30,8 +40,8 @@ global dynAerThr is 1.2. // Dynamic pressure threshold to switch from aero to th
 
 global arrGridFins is list(). // Array for grid fins
 
-global pidTarPad is pidLoop(10, 0.5, 2, -30, 30). // PID loop for targeting pad
-set pidTarPad:setpoint to 0.
+global pidThr is pidLoop(0.7, 0.2, 0, 0.0000001, 1). // PID loop for throttle balance
+set pidThr:setpoint to 0.
 
 //---------------------------------------------------------------------------------------------------------------------
 // #endregion
@@ -136,6 +146,7 @@ lock mSrf to (vecPad - vxcl(up:vector, SHIP:geoposition:position)):mag.
 lock pctProp to (rsCoreCH4:amount / rsCoreCH4:capacity) * 100.
 lock degAOAPro to vAng(srfPrograde:vector, SHIP:facing:vector).
 lock degVector to 0.
+lock degProDes to 0.
 lock degVecTrg to 0.
 lock mpsVrtTrg to 0.
 
@@ -189,7 +200,7 @@ function write_console { // Write unchanging display elements and header line of
 function write_screen { // Write dynamic display elements and write telemetry to logfile
 	parameter phase.
 	parameter writelog.
-	print phase + "                " at (14, 0).
+	print phase + "               " at (14, 0).
 	// print "----------------------------".
 	print round(SHIP:altitude, 0) + "    " at (14, 2).
 	// print "----------------------------".
@@ -203,7 +214,7 @@ function write_screen { // Write dynamic display elements and write telemetry to
 	print round(degBerPad, 2) + "    " at (14, 11).
 	print round(degVector, 2) + "    " at (14, 12).
 	print round(degAOAPro, 2) + "    " at (14, 13).
-	print round(degVecTrg, 2) + "    " at (14, 14).
+	print round(degProDes, 2) + "    " at (14, 14).
 	// print "----------------------------".
 	print round(pctProp, 0) + "    " at (14, 16).
 	print round(throttle * 100, 2) + "    " at (14, 17).
@@ -221,7 +232,7 @@ function write_screen { // Write dynamic display elements and write telemetry to
 		set logline to logline + round(degBerPad, 2) + ",".
 		set logline to logline + round(degVector, 2) + ",".
 		set logline to logline + round(degAOAPro, 2) + ",".
-		set logline to logline + round(degVecTrg, 2) + ",".
+		set logline to logline + round(degProDes, 2) + ",".
 		set logline to logline + round(pctProp, 0) + ",".
 		set logline to logline + round(throttle * 100, 2) + ",".
 		set logline to logline + round(mpsVrtTrg, 0) + ",".
@@ -245,6 +256,13 @@ function heading_of_vector { // heading_of_vector returns the heading of the vec
 	local trig_y IS VDOT(east, vecT).
 	local result IS ARCTAN2(trig_y, trig_x).
 	if result < 0 { return 360 + result. } else { return result. }
+}
+
+function set_rcs_translate { // Set RCS translation values to target tower
+	parameter mag.
+	parameter deg.
+	set SHIP:control:top to min(1, mag) * cos(deg - degPadEnt).
+	set SHIP:control:starboard to 0 - min(1, mag) * sin(deg - degPadEnt).
 }
 
 function target_is_body { // Is parameter a valid target
@@ -317,138 +335,143 @@ write_console().
 // #region FLIGHT
 //---------------------------------------------------------------------------------------------------------------------
 
-// Stage: PRE-LAUNCH
-if target_is_body(launchTrg) {
-	set target to launchTrg.
-	until abs(SHIP:orbit:lan - target:orbit:lan) < 0.3 {
-		write_screen("Pre-launch: - " + round(abs(SHIP:orbit:lan - target:orbit:lan), 4), false).
+
+if SHIP:status = "PRELAUNCH" {
+
+	// Stage: PRE-LAUNCH
+	if target_is_body(launchTrg) {
+		set target to launchTrg.
+		until abs(SHIP:orbit:lan - target:orbit:lan) < 0.3 {
+			write_screen("Pre-launch: - " + round(abs(SHIP:orbit:lan - target:orbit:lan), 4), false).
+		}
 	}
-}
-if target_is_vessel(launchTrg) {
-	set target to launchTrg.
-	until abs(target:distance) < mVesDst {
-		write_screen("Pre-launch: - " + round(abs(target:distance - mVesDst) / 1000, 0), false).
+	if target_is_vessel(launchTrg) {
+		set target to launchTrg.
+		until (target:distance / 1000) < kmVesDst and abs(SHIP:orbit:lan - target:orbit:lan) < degMaxInc {
+			write_screen("D:" + round((target:distance / 1000), 0) + "|I:" + round(abs(SHIP:orbit:lan - target:orbit:lan), 2), false).
+		}
 	}
-}
 
-// Stage: IGNITION
-lock throttle to 1.
-if mdQDSH:hasevent("Open") { mdQDSH:doevent("Open"). }
-if mdQDSS:hasevent("Open") { mdQDSS:doevent("Open"). }
+	// Stage: IGNITION
+	lock throttle to 1.
+	if mdQDSH:hasevent("Open") { mdQDSH:doevent("Open"). }
+	if mdQDSS:hasevent("Open") { mdQDSS:doevent("Open"). }
 
-until mdAllEngs:getfield("thrust") > kNThrLaunch {
-	write_screen("Ignition", false).
-}
+	until mdAllEngs:getfield("thrust") > kNThrLaunch {
+		write_screen("Ignition", false).
+	}
 
-// Stage: LIFT OFF
-lock steering to up.
-mdOLPClamp:doaction("Release clamp", true).
+	// Stage: LIFT OFF
+	lock steering to up.
+	mdOLPClamp:doaction("Release clamp", true).
 
-until SHIP:altitude > mGravTurn {
-	write_screen("Lift off", true).
-}
+	until SHIP:altitude > mGravTurn {
+		write_screen("Lift off", true).
+	}
 
-// Stage: GRAVITY TURN
-lock degPitTrg to (1 - (sqrt((SHIP:apoapsis - mGravTurn) / mPETrg) * 1.05)) * 90.
-lock steering to lookDirUp(heading(90, degPitTrg):vector, up:vector).
+	// Stage: GRAVITY TURN
+	lock degPitTrg to (1 - (sqrt((SHIP:apoapsis - mGravTurn) / mPETrg) * 1.05)) * 90.
+	lock steering to lookDirUp(heading(90, degPitTrg):vector, up:vector).
 
-until pctProp < pctMinProp {
-	write_screen("Gravity turn", true).
-}
+	until pctProp < pctMinProp {
+		write_screen("Gravity turn", true).
+	}
 
-// Stage: STAGE
-lock throttle to 0.
-mdAllEngs:doaction("shutdown engine", true).
-wait 0.1.
-mdMidEngs:doaction("shutdown engine", true).
-wait 0.1.
-mdCntEngs:doaction("shutdown engine", true).
-wait 0.1.
-mdDecouple:doevent("decouple").
+	// Stage: STAGE
+	lock throttle to 0.
+	mdAllEngs:doaction("shutdown engine", true).
+	wait 0.1.
+	mdMidEngs:doaction("shutdown engine", true).
+	wait 0.1.
+	mdCntEngs:doaction("shutdown engine", true).
+	wait 0.1.
+	mdDecouple:doevent("decouple").
 
-local timeStage is time:seconds + 4.
-until time:seconds > timeStage {
-	write_screen("Stage", true).
-}
+	local timeStage is time:seconds + 4.
+	until time:seconds > timeStage {
+		write_screen("Stage", true).
+	}
 
-// Stage: BEGIN FLIP
-for mdGridFin in arrGridFins { // Enable manual control
-	mdGridFin:setfield("pitch", false).
-	mdGridFin:setfield("yaw", false).
-	mdGridFin:setfield("roll", false).
-}
-rcs on.
-set SHIP:control:pitch to 1. // Begin pitch over
+	// Stage: BEGIN FLIP
+	for mdGridFin in arrGridFins { // Enable manual control
+		mdGridFin:setfield("pitch", false).
+		mdGridFin:setfield("yaw", false).
+		mdGridFin:setfield("roll", false).
+	}
+	rcs on.
+	set SHIP:control:pitch to 1. // Begin pitch over
 
-until mdCntEngs:getfield("propellant") = "Very Stable (100.00 %)" {
-	write_screen("Begin flip", true).
-}
+	until mdCntEngs:getfield("propellant") = "Very Stable (100.00 %)" {
+		write_screen("Begin flip", true).
+	}
 
-// Stage: FLIP
-set SHIP:control:pitch to 0.
-rcs off.
-local headBB is heading_of_vector(srfRetrograde:vector).
+	// Stage: FLIP
+	set SHIP:control:pitch to 0.
+	rcs off.
+	local headBB is heading_of_vector(srfRetrograde:vector).
 
-until vAng(SHIP:facing:vector, heading(headBB, 0):vector) < 30 {
-	write_screen("Flip", true).
-}
+	until vAng(SHIP:facing:vector, heading(headBB, 0):vector) < 30 {
+		write_screen("Flip", true).
+	}
 
-// Stage: BOOSTBACK
-mdAllEngs:doaction("shutdown engine", true).
-wait 0.1.
-mdMidEngs:doaction("activate engine", true).
-wait 0.1.
-mdCntEngs:doaction("activate engine", true).
-wait 0.1.
-lock throttle to 1.
-rcs on.
-lock steering to lookdirup(heading(headBB, 0):vector, heading(0, -90):vector). // Aim at horizon in direction of retrograde
+	// Stage: BOOSTBACK
+	mdAllEngs:doaction("shutdown engine", true).
+	wait 0.1.
+	mdMidEngs:doaction("activate engine", true).
+	wait 0.1.
+	mdCntEngs:doaction("activate engine", true).
+	wait 0.1.
+	lock throttle to 1.
+	rcs on.
+	lock steering to lookdirup(heading(headBB, 0):vector, heading(0, -90):vector). // Aim at horizon in direction of retrograde
 
-until abs(degBerPad) < 20 {
-	write_screen("Boostback", true).
-	set navMode to "Surface".
-}
+	until abs(degBerPad) < 20 {
+		write_screen("Boostback", true).
+		// set navMode to "Surface".
+	}
 
-// Stage: TARGET PAD
-lock steering to lookdirup(heading(pad:heading + degBerPad, 0):vector, heading(0, -90):vector).
-mdAllEngs:doaction("shutdown engine", true).
-wait 0.1.
-mdMidEngs:doaction("shutdown engine", true).
-wait 0.1.
-mdCntEngs:doaction("activate engine", true).
-wait 0.1.
-lock timeFall to sqrt((2 * SHIP:apoapsis) / 9.8).
-lock mpsVelTrg to mSrf / (eta:apoapsis + timeFall).
+	// Stage: TARGET PAD
+	lock steering to lookdirup(heading(pad:heading + degBerPad, 0):vector, heading(0, -90):vector).
+	mdAllEngs:doaction("shutdown engine", true).
+	wait 0.1.
+	mdMidEngs:doaction("shutdown engine", true).
+	wait 0.1.
+	mdCntEngs:doaction("activate engine", true).
+	wait 0.1.
+	lock timeFall to sqrt((2 * SHIP:apoapsis) / 9.8).
+	lock mpsVelTrg to (mSrf + mOvrSht) / (eta:apoapsis + timeFall).
 
-until SHIP:groundspeed > (mpsVelTrg * 0.99) {
-	write_screen("Target Pad", true).
-	set navMode to "Surface".
-}
+	until SHIP:groundspeed > (mpsVelTrg * 0.99) {
+		write_screen("Target Pad", true).
+		// set navMode to "Surface".
+	}
 
-// Stage: STABILISE
-lock throttle to 0.
-rcs on.
-lock steering to lookdirup(heading(pad:heading, 0):vector, heading(0, -90):vector).
-local timeStab is time:seconds + 20.
+	// Stage: STABILISE
+	lock throttle to 0.
+	rcs on.
+	lock steering to lookdirup(heading(pad:heading, 0):vector, heading(0, -90):vector).
+	local timeStab is time:seconds + 20.
 
-until time:seconds > timeStab {
-	write_screen("Stabilise", true).
-}
+	until time:seconds > timeStab {
+		write_screen("Stabilise", true).
+	}
 
-// Stage: BEGIN RE-ORIENT
-set SHIP:control:pitch to -1. // Begin pitch back
-local timeRO is time:seconds + 7.
+	// Stage: BEGIN RE-ORIENT
+	set SHIP:control:pitch to -1. // Begin pitch back
+	local timeRO is time:seconds + 7.
 
-until time:seconds > timeRO {
-	write_screen("Begin re-orient", true).
-}
+	until time:seconds > timeRO {
+		write_screen("Begin re-orient", true).
+	}
 
-// Stage: RE-ORIENT
-set SHIP:control:pitch to 0.
-rcs off.
+	// Stage: RE-ORIENT
+	set SHIP:control:pitch to 0.
+	rcs off.
 
-until 180 - abs(degAOAPro) < 20 {
-	write_screen("Re-orient", true).
+	until 180 - abs(degAOAPro) < 20 {
+		write_screen("Re-orient", true).
+	}
+
 }
 
 // Stage: RETRO ATTITUDE
@@ -459,23 +482,35 @@ until SHIP:altitude < mAeroGuid {
 	write_screen("Retro attitude", true).
 }
 
+// Re-entry section is effective to begin with but it all goes wrong at about 20km alt
+// It seems this version of KSP/FAR gives the atmos much greater effect on the light body of the nearly empty SH
+// So, the angle between prograde and the desired vector just keeps increasing from sometime below 20km alt
+// I've not yet found a consistent way to reduce the angle, should possibly start to look into serious grid fin automation
+// For the moment though, everything below these comments is basically up for grabs
 // Stage: RE-ENTRY
-lock degVecTrg to (SHIP:altitude - 1000) / 25000. // Calculate desired angle for falling trajectory
+lock degVecTrg to (SHIP:altitude - 1000) / 2500. // Calculate desired angle for falling trajectory
 lock axsPadZen to vcrs(pad:position, SHIP:up:vector). // Common axis of the vector to the pad and up
 lock rotPadDes to angleAxis(degVecTrg, axsPadZen).
 lock vecDesire to rotPadDes * pad:position. // Desired vector - we want to be travelling in this direction
-lock axsProDes to vcrs(srfPrograde:vector, vecDesire). // Common axis of the prograde vector and the desired vector
 lock degProDes to vAng(srfPrograde:vector, vecDesire). // Angle between the prograde vector and the desired vector
-lock axsProDes to vcrs(vecDesire, srfPrograde:vector).
-lock rotMag to max(-25, min(25, degProDes * (0 - ((5 - SHIP:q) * 2)))). // Magnitude of the rotation
+lock axsProDes to vcrs(vecDesire, srfPrograde:vector). // Common axis of the prograde vector and the desired vector
+lock rotMag to max(-15, min(15, degProDes * (0 - ((5 - SHIP:q) * 2)))). // Magnitude of the rotation
 lock rotProDes to angleAxis(rotMag, axsProDes).
 lock steering to lookdirup(rotProDes * -vecDesire, heading(degPadEnt, 0):vector). // Product of rotProDes and '-' of the desired vector
 
-until SHIP:altitude < 16000 {
+until SHIP:altitude < mLdgBrn {
 	write_screen("Re-entry", true).
 }
 
 // Stage: LANDING BURN (AERO)
+lock steering to lookdirup(heading(pad:heading + degBerPad, 0):vector, heading(0, -90):vector).
+mdAllEngs:doaction("shutdown engine", true).
+wait 0.1.
+mdMidEngs:doaction("activate engine", true).
+wait 0.1.
+mdCntEngs:doaction("activate engine", true).
+wait 0.1.
+lock throttle to 1.
 set mAltTrg to mAltAP1.
 lock degProPad to vAng(srfPrograde:vector, pad:position).
 lock axsProPad to vcrs(srfPrograde:vector, pad:position).
@@ -494,7 +529,73 @@ until SHIP:verticalspeed > mpsVrtTrg {
 	write_screen("Landing burn (thrust)", true).
 }
 
+// Stage: BALANCE THROTTLE
+mdAllEngs:doaction("shutdown engine", true).
+wait 0.1.
+mdMidEngs:doaction("shutdown engine", true).
+wait 0.1.
+mdCntEngs:doaction("activate engine", true).
+wait 0.1.
+lock mpsVrtTrg to (mAltTrg - SHIP:altitude) / 5.
+lock throttle to max(0.0001, pidThr:update(time:seconds, SHIP:verticalspeed - mpsVrtTrg)). // Attempt to hover at mAltTrg
+set padOS to latlng(pad:lat - ((mTowerHgt * mltOffset/SHIP:altitude) * (SHIP:geoposition:lat - pad:lat)), pad:lng - ((mTowerHgt * mltOffset/SHIP:altitude) * (SHIP:geoposition:lng - pad:lng))).
+lock mltDflBal to 50 / (SHIP:altitude / 250).
+lock degProOSP to vAng(srfPrograde:vector, padOS:position).
+lock axsProOSP to vcrs(srfPrograde:vector, padOS:position).
+lock rotProOSP to angleAxis(max(degMaxTBD, degProOSP * ( mltDflBal)), axsProOSP).
+// lock rotProOSP to angleAxis(max(0 - degMaxTBD, degProOSP * (0 - mltDflBal)), axsProOSP).
+lock steering to lookdirup(rotProOSP * srfRetrograde:vector, heading(degPadEnt, 0):vector). // Target offset pad
 
+until SHIP:altitude < mAltAP1 {
+	write_screen("Balance throttle", true).
+}
+
+// Stage: TOWER APPROACH
+set mAltTrg to mAltAP2.
+lock vecSrfVel to vxcl(up:vector, SHIP:velocity:surface).
+set sTTR to 0.01 + min(10, mSrf).
+lock vecThr to ((vecPad / sTTR) - vecSrfVel).
+lock degThrHed to heading_of_vector(vecThr).
+lock steering to lookdirup(vecThr + (150 * up:vector), heading(degPadEnt, 0):vector).
+unlock rotProOSP.
+unlock axsProOSP.
+unlock degProOSP.
+
+until mSrf < 5 and SHIP:groundspeed < 3 and SHIP:altitude < mAltWP2 {
+	write_screen("Tower Approach", true).
+	set_rcs_translate(vecThr:mag, degThrHed).
+}
+
+// Stage: DESCENT
+lock steering to lookDirUp(up:vector, heading(degPadEnt, 0):vector).
+set mAltTrg to mAltAP3.
+
+until SHIP:altitude < mAltWP4 {
+	write_screen("Descent", true).
+	set_rcs_translate(vecThr:mag, degThrHed).
+}
+
+// Stage: TOWER CATCH
+lock throttle to 0.
+set SHIP:control:top to 0.
+set SHIP:control:starboard to 0.
+unlock steering.
+rcs off.
+for mdGridFin in arrGridFins {
+	// Disable manual control
+	mdGridFin:setfield("pitch", true).
+	mdGridFin:setfield("yaw", true).
+	mdGridFin:setfield("roll", true).
+}
+
+local sStabilise is 10.
+local timeStable is time:seconds + sStabilise.
+until time:seconds > timeStable {
+	write_screen("Tower catch", true).
+}
+
+unlock steering.
+sas on.
 
 //---------------------------------------------------------------------------------------------------------------------
 // #endregion

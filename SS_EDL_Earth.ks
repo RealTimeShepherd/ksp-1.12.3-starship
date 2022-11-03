@@ -4,7 +4,7 @@
 //---------------------------------------------------------------------------------------------------------------------
 
 // Logfile
-global log is "ss_edl_earth_log.csv".
+global log is "Telemetry/ss_edl_earth_log.csv".
 
 // Define Boca Chica catch tower - long term get this from target info
 global pad is latlng(25.9669968, -97.1416771). // Tower Catch point - BC OLIT 1
@@ -591,7 +591,7 @@ until SHIP:altitude < mAltWP1 {
 	write_screen("Balance Throttle", true).
 }
 
-// Stage: PAD APPROACH
+// Stage: TOWER APPROACH
 set mAltTrg to mAltAP2.
 if SHIP:mass > 180 {
     ptRaptorSLA:shutdown.
@@ -616,7 +616,6 @@ until mSrf < 5 and SHIP:groundspeed < 3 and SHIP:altitude < mAltWP2 {
 // Stage: DESCENT
 lock steering to lookDirUp(up:vector, heading(degPadEnt, 0):vector).
 set mAltTrg to mAltAP3.
-// lock mpsVrtTrg to -5.
 
 until SHIP:altitude < mAltWP4 {
 	write_screen("Descent", true).

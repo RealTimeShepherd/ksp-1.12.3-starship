@@ -4,7 +4,7 @@
 //---------------------------------------------------------------------------------------------------------------------
 
 // Logfile
-global log is "ss_lto_earth_log.csv".
+global log is "Telemetry/ss_lto_earth_log.csv".
 
 // Arrays for flaps and engines
 global arrSSFlaps is list().
@@ -16,7 +16,7 @@ global arrSPModules is list().
 // Set target orbit values
 global mAPTrg is 500000. // Target apogee
 global mPETrg is 200000. // Target perigee
-global mpsExhVel is 3231. // Raptor engines exhaust velocity (Calculated from in-game telemertry)
+global mpsExhVel is 3231. // Raptor engines exhaust velocity (Calculated from in-game telemetry)
 global tpsMLRate is 3.4. // Mass in tons lost per second of all 6 raptor engines firing (From in-game telemetry)
 global cnsGME is 3.986e+14. // Earth's gravitational constant
 global mEarthR is 6375000. // Radius of Earth (m)
@@ -74,6 +74,7 @@ if defined ptSSHeader {
 // Bind to modules & resources within StarShip Command
 if defined ptSSCommand {
 	set mdSSCMRCS to ptSSCommand:getmodule("ModuleRCSFX").
+	set mdSSCommand to ptSSCommand:getmodule("ModuleCommand").
 	// Bind to command tanks
 	for rsc in ptSSCommand:resources {
 		if rsc:name = "LqdOxygen" { set rsCMLOX to rsc. }
@@ -84,6 +85,7 @@ if defined ptSSCommand {
 // Bind to modules & resources within StarShip Body
 if defined ptSSBody {
 	set mdSSBDRCS to ptSSBody:getmodule("ModuleRCSFX").
+	set mdSSBDDN to ptSSBody:getmodule("ModuleDockingNode").
 	// Bind to command tanks
 	for rsc in ptSSBody:resources {
 		if rsc:name = "LqdOxygen" { set rsBDLOX to rsc. }
@@ -363,65 +365,69 @@ write_console().
 // #region FLIGHT
 //---------------------------------------------------------------------------------------------------------------------
 
-// Stage: PRE-LAUNCH
-until SHIP:verticalspeed > 0.1 {
-	write_screen("Pre-launch", false).
-}
+if SHIP:status = "PRELAUNCH" {
 
-// Stage: ON BOOSTER
-until onBooster = false {
-	write_screen("On Booster", true).
-	set onBooster to false.
-	for pt in SHIP:parts {
-		if pt:name:startswith("SEP.B4.INTER") { set onBooster to true. }
+	// Stage: PRE-LAUNCH
+	until SHIP:verticalspeed > 0.1 {
+		write_screen("Pre-launch", false).
 	}
-}
 
-// Stage: STAGE
-for ptRaptorSL in arrRaptorSL { ptRaptorSL:activate. }
-for ptRaptorVac in arrRaptorVac { ptRaptorVac:activate. }
-lock throttle to 1.
-local timeStage is time:seconds + 4.
+	// Stage: ON BOOSTER
+	until onBooster = false {
+		write_screen("On Booster", true).
+		set onBooster to false.
+		for pt in SHIP:parts {
+			if pt:name:startswith("SEP.B4.INTER") { set onBooster to true. }
+		}
+	}
 
-until time:seconds > timeStage {
-	write_screen("Stage", true).
-}
+	// Stage: STAGE
+	for ptRaptorSL in arrRaptorSL { ptRaptorSL:activate. }
+	for ptRaptorVac in arrRaptorVac { ptRaptorVac:activate. }
+	lock throttle to 1.
+	local timeStage is time:seconds + 4.
 
-// Stage: ASCENT
-lock steering to lookDirUp(heading(heading_of_vector(prograde:vector) - degYawTrg, degPitTrg + vang(prograde:vector, vxcl(up:vector, prograde:vector))):vector, up:vector).
-set mpsVrtTrg to calculate_tvspd().
+	until time:seconds > timeStage {
+		write_screen("Stage", true).
+	}
 
-until sToTrgVel < sToOrbIns {
-	write_screen("Ascent", true).
+	// Stage: ASCENT
+	lock steering to lookDirUp(heading(heading_of_vector(prograde:vector) - degYawTrg, degPitTrg + vang(prograde:vector, vxcl(up:vector, prograde:vector))):vector, up:vector).
 	set mpsVrtTrg to calculate_tvspd().
-	set degPitTrg to calculate_pitch().
-	set degYawTrg to pidYaw:update(time:seconds, degTarDlt).
-}
 
-// Stage: ORBITAL INSERTION
-until SHIP:orbit:apoapsis > (mAPTrg * 0.9) {
-	write_screen("Orbital insertion", true).
-	set mpsVrtTrg to calculate_tvspd().
-	set degPitTrg to calculate_pitch().
-	set degYawTrg to pidYaw:update(time:seconds, degTarDlt).
-}
+	until sToTrgVel < sToOrbIns {
+		write_screen("Ascent", true).
+		set mpsVrtTrg to calculate_tvspd().
+		set degPitTrg to calculate_pitch().
+		set degYawTrg to pidYaw:update(time:seconds, degTarDlt).
+	}
 
-// Stage: TRIM
-set degYawTrg to 0.
-set degPitTrg to 0.
-lock throttle to 0.4.
+	// Stage: ORBITAL INSERTION
+	until SHIP:orbit:apoapsis > (mAPTrg * 0.9) {
+		write_screen("Orbital insertion", true).
+		set mpsVrtTrg to calculate_tvspd().
+		set degPitTrg to calculate_pitch().
+		set degYawTrg to pidYaw:update(time:seconds, degTarDlt).
+	}
 
-until SHIP:orbit:apoapsis > (mAPTrg * 0.97) {
-	write_screen("Trim        ", true).
-}
+	// Stage: TRIM
+	set degYawTrg to 0.
+	set degPitTrg to 0.
+	lock throttle to 0.4.
 
-lock throttle to 0.
-rcs on.
-set SHIP:control:fore to 1.
+	until SHIP:orbit:apoapsis > (mAPTrg * 0.97) {
+		write_screen("Trim        ", true).
+	}
 
-until SHIP:orbit:apoapsis > (mAPTrg * 0.999) {
-	write_screen("Trim", true).
-	set SHIP:control:fore to max(1, (mAPTrg - SHIP:orbit:apoapsis) / (mAPTrg * 0.97)).
+	lock throttle to 0.
+	rcs on.
+	set SHIP:control:fore to 1.
+
+	until SHIP:orbit:apoapsis > (mAPTrg * 0.999) {
+		write_screen("Trim", true).
+		set SHIP:control:fore to max(1, (mAPTrg - SHIP:orbit:apoapsis) / (mAPTrg * 0.97)).
+	}
+
 }
 
 // Stage: COAST TO APOGEE

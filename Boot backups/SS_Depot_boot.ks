@@ -1,12 +1,7 @@
 
-parameter dockTrg.
-
 //---------------------------------------------------------------------------------------------------------------------
 // #region GLOBALS
 //---------------------------------------------------------------------------------------------------------------------
-
-// Logfile
-global log is "Telemetry/ss_dock.csv".
 
 // Arrays for flaps and engines
 global arrSSFlaps is list().
@@ -106,33 +101,12 @@ function write_console { // Write unchanging display elements and header line of
 	clearScreen.
 	print "Phase:        " at (0, 0).
 	print "----------------------------" at (0, 1).
-
-	deletePath(log).
-	local logline is "MET,".
-	set logline to logline + "Phase,".
-	log logline to log.
 }
 
 function write_screen { // Write dynamic display elements and write telemetry to logfile
 	parameter phase.
-	parameter writelog.
 	print phase + "        " at (14, 0).
 	// print "----------------------------".
-
-	if writelog = true {
-		local logline is round(missionTime, 1) + ",".
-		set logline to logline + phase + ",".
-		log logline to log.
-	}
-}
-
-function target_is_vessel { // Is parameter a valid target
-	parameter testTrg.
-	list targets in targetlist.
-	for trg in targetlist {
-		if trg:name = testTrg { return true. }
-	}
-	return false.
 }
 
 //---------------------------------------------------------------------------------------------------------------------
@@ -191,13 +165,20 @@ write_console().
 // #region FLIGHT
 //---------------------------------------------------------------------------------------------------------------------
 
-if target_is_vessel(dockTrg) {
-	set target to dockTrg.
+list targets in targs.
+for targ in targs {
+	if targ:distance < 10000 {
+		set docker to targ.
+	}
+}
+
+until docker:distance < 500 {
+	write_screen("Waiting", true).
 }
 
 rcs on.
-lock axsTrgFac to vcrs(target:position, target:facing:vector).
-lock rotTrgFac to angleAxis(90, axsTrgFac).
-lock steering to lookDirUp(target:facing:vector, target:position).
+lock steering to lookDirUp(docker:facing:vector, docker:position).
 
-until false {}
+until false {
+	write_screen("Facing dock target", true).
+}

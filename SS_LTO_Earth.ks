@@ -342,7 +342,7 @@ lock throttle to 0.
 // Shut down sea level Raptors
 for ptRaptorSL in arrRaptorSL { ptRaptorSL:shutdown. }
 
-// Shut down vaccuum Raptors
+// Shut down vacuum Raptors
 for ptRaptorVac in arrRaptorVac { ptRaptorVac:shutdown. }
 
 // Set flaps to launch position

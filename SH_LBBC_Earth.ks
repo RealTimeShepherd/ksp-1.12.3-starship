@@ -25,7 +25,8 @@ global pctMinProp is 18. // Percent of propellant remaining to trigger MECO & st
 global mAeroGuid is 60000. // Altitude to switch to aerodynamic guidance
 
 global mPETrg is 200000. // Altitude of target perigee
-global kmVesDst is 1150. // Distance of target vessel to trigger launch
+global kmVesDst is 1125. // Distance of target vessel to trigger launch
+global kmIncDst is 60. // Number of additional Km to add per degree of inclination delta
 global degMaxInc is 2. // Maximum inclination delta to trigger launch
 
 global mOvrSht is 2000. // Overshoot targeting of tower in metres
@@ -339,20 +340,22 @@ write_console().
 if SHIP:status = "PRELAUNCH" {
 
 	// Stage: PRE-LAUNCH
+	lock degTrgInc to abs(SHIP:orbit:lan - target:orbit:lan).
 	if target_is_body(launchTrg) {
 		set target to launchTrg.
-		until abs(SHIP:orbit:lan - target:orbit:lan) < 0.3 {
-			write_screen("Pre-launch: - " + round(abs(SHIP:orbit:lan - target:orbit:lan), 4), false).
+		until degTrgInc < 0.3 {
+			write_screen("Pre-launch: - " + round(degTrgInc, 4), false).
 		}
 	}
-	if target_is_vessel(launchTrg) {
+	if target_is_vessel(launchTrg) { // Launch to circularise as close to target vessel as possible
 		set target to launchTrg.
-		until (target:distance / 1000) < kmVesDst and abs(SHIP:orbit:lan - target:orbit:lan) < degMaxInc {
-			write_screen("D:" + round((target:distance / 1000), 0) + "|I:" + round(abs(SHIP:orbit:lan - target:orbit:lan), 2), false).
+		until (target:distance / 1000) < (kmVesDst + (kmIncDst * degTrgInc)) and degTrgInc < degMaxInc {
+			write_screen("D:" + round((target:distance / 1000), 0) + "|I:" + round(degTrgInc, 2), false).
 		}
 	}
 
 	// Stage: IGNITION
+	unlock degTrgInc.
 	lock throttle to 1.
 	if mdQDSH:hasevent("Open") { mdQDSH:doevent("Open"). }
 	if mdQDSS:hasevent("Open") { mdQDSS:doevent("Open"). }

@@ -49,13 +49,13 @@ if mdArmMove:hasevent("open arms") { mdArmMove:doevent("open arms"). }
 clearscreen.
 print "Searching for catch target".
 
-if SHIP:Name <> "StarShip tanker" {
+if SHIP:Name <> "Tanker StarShip" and SHIP:Name <> "Crew StarShip" {
 
 	set catch to "NULL".
 	until catch <> "NULL" {
 		list targets in targs.
 		for targ in targs {
-			if targ:Name = "SuperHeavy" or targ:Name = "Crew StarShip" {
+			if targ:Name = "SuperHeavy" or targ:Name = "Tanker StarShip" or targ:Name = "Crew StarShip" {
 				set catch to targ.
 			}
 		}

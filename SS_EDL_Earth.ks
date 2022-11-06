@@ -431,7 +431,7 @@ ptRaptorSLA:shutdown.
 ptRaptorSLB:shutdown.
 ptRaptorSLC:shutdown.
 
-// Shut down vaccuum Raptors
+// Shut down vacuum Raptors
 for ptRaptorVac in arrRaptorVac { ptRaptorVac:shutdown. }
 
 // Set flaps to entry position
@@ -492,8 +492,8 @@ set pidRol to pidLoop(arrRolMeso[0], arrRolMeso[1], arrRolMeso[2]).
 until SHIP:altitude < mAltStrt {
 	write_screen("Mesosphere (Flaps)", true).
 	set degPitTrg to calculate_lrp().
-	calculate_csf().
 	set degYawTrg to kpaDynPrs * (0 - degBerPad).
+	calculate_csf().
 	set_flaps().
 }
 

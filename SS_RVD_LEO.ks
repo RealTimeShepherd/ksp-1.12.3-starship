@@ -1,7 +1,11 @@
 
-parameter dockTrg.
-set target to dockTrg.
-
+parameter dockTarget.
+list targets in targs.
+for targ in targs {
+	if targ:name = dockTarget {
+		set dockTrg to targ.
+	}
+}
 //---------------------------------------------------------------------------------------------------------------------
 // #region GLOBALS
 //---------------------------------------------------------------------------------------------------------------------
@@ -9,7 +13,11 @@ set target to dockTrg.
 // Logfile
 global log is "Telemetry/ss_rvd_leo.csv".
 
-global mOldTDist is 0. // Old target distance, used to detect if we are approaching or departing target
+global mDistRndv is 5000. // Distance for rendezvous
+global mDistDock is 300. // Distance for docking
+
+global vecHldNos is 0. // Vector to hold attitude when docking
+global vecHldPrt is 0. // Vector to hold attitude when docking
 
 // Arrays for flaps and engines
 global arrSSFlaps is list().
@@ -99,10 +107,15 @@ for ptSolarPanel in arrSolarPanels {
 // #region LOCKS
 //---------------------------------------------------------------------------------------------------------------------
 
-lock vecSS2Trg to SHIP:velocity:orbit - target:velocity:orbit.
-lock degRelTrg to vAng(vecSS2Trg, target:position).
+lock vecSS2Trg to SHIP:velocity:orbit - dockTrg:velocity:orbit.
+lock vecTrg2SS to dockTrg:velocity:orbit - SHIP:velocity:orbit.
+lock degRelTrg to vAng(vecSS2Trg, dockTrg:position).
 lock sOPSelf to abs(orbit:eta:apoapsis - orbit:eta:periapsis) * 2.
-lock sOPTarg to abs(target:orbit:eta:apoapsis - target:orbit:eta:periapsis) * 2.
+lock sOPTarg to abs(dockTrg:orbit:eta:apoapsis - dockTrg:orbit:eta:periapsis) * 2.
+lock degTrgNos to vAng(SHIP:facing:vector, dockTrg:facing:vector).
+lock mDockDltX to 0. // X delta - used for docking
+lock mDockDltY to 0. // Y delta - used for docking
+lock mDockDltZ to 0. // Z delta - used for docking
 
 //---------------------------------------------------------------------------------------------------------------------
 // #endregion
@@ -117,6 +130,10 @@ function write_console { // Write unchanging display elements and header line of
 	print "Relative vel:            mps" at (0, 2).
 	print "Relative ang:            deg" at (0, 3).
 	print "Target dist:               s" at (0, 4).
+	print "----------------------------" at (0, 5).
+	print "Dock Port X:               m" at (0, 6).
+	print "Dock Port Y:               m" at (0, 7).
+	print "Dock Port Z:               m" at (0, 8).
 
 	deletePath(log).
 	local logline is "MET,".
@@ -124,6 +141,9 @@ function write_console { // Write unchanging display elements and header line of
 	set logline to logline + "Relative vel,".
 	set logline to logline + "Relative ang,".
 	set logline to logline + "Target dist,".
+	set logline to logline + "Dock Port X,".
+	set logline to logline + "Dock Port Y,".
+	set logline to logline + "Dock Port Z,".
 	log logline to log.
 }
 
@@ -134,14 +154,17 @@ function write_screen { // Write dynamic display elements and write telemetry to
 	// print "----------------------------".
 	print round(vecSS2Trg:mag, 1) + "    " at (14, 2).
 	print round(degRelTrg, 2) + "    " at (14, 3).
-	print round(target:distance, 0) + "    " at (14, 4).
+	print round(dockTrg:distance, 0) + "    " at (14, 4).
+	print round(mDockDltX, 2) + "    " at (14, 6).
+	print round(mDockDltY, 2) + "    " at (14, 7).
+	print round(mDockDltZ, 2) + "    " at (14, 8).
 
 	if writelog = true {
 		local logline is round(missionTime, 1) + ",".
 		set logline to logline + phase + ",".
 		set logline to logline + round(vecSS2Trg:mag, 1) + ",".
 		set logline to logline + round(degRelTrg, 2) + ",".
-		set logline to logline + round(target:distance, 0) + ",".
+		set logline to logline + round(dockTrg:distance, 0) + ",".
 		log logline to log.
 	}
 }
@@ -202,130 +225,177 @@ write_console().
 // #region FLIGHT
 //---------------------------------------------------------------------------------------------------------------------
 
-rcs on.
+// Activate vacuum Raptors
+for ptRaptorVac in arrRaptorVac { ptRaptorVac:activate. }
 
-if target:distance > 10000 {
+if dockTrg:distance > mDistRndv {
+
+	// Stage: Wait for node
+	lock degIncDlt to SHIP:orbit:lan - dockTrg:orbit:lan.
+	set degOldID to degIncDlt.
+	wait 1.
+	if degIncDlt > degOldID {
+		// Inclination delta is increasing
+		until degIncDlt < degOldID {
+			write_screen("Waiting for node", true).
+			set degOldID to degIncDlt.
+			wait 1.
+		}
+	} else {
+		// Inclination delta is decreasing
+		until degIncDlt > degOldID {
+			write_screen("Waiting for node", true).
+			set degOldID to degIncDlt.
+			wait 1.
+		}
+	}
 
 	// Stage: INTERCEPT
-	
-	// Really should wait until AN or DN before intercept burn
+	rcs on.
+	set navMode to "orbit".
+	local sTrgDlt is dockTrg:distance / dockTrg:velocity:orbit:mag.
 
-	// Activate vacuum Raptors
-	for ptRaptorVac in arrRaptorVac { ptRaptorVac:activate. }
-
-	// How many seconds ahead or behind is target
-	local sTrgDlt is target:distance / target:velocity:orbit:mag.
-
-	if vang(target:position, SHIP:prograde:vector) < vang(target:position, SHIP:retrograde:vector) {
+	if vang(dockTrg:position, SHIP:prograde:vector) < vang(dockTrg:position, SHIP:retrograde:vector) {
 		// Target is ahead
 		lock steering to lookDirUp(retrograde:vector, up:vector).
 		// Wait for orientation
 		until vAng(SHIP:facing:vector, retrograde:vector) < 0.5 {
-			write_screen("Face Retrograde", true).
+			write_screen("Facing retrograde", true).
 		}
 		lock throttle to 0.4.
 		until sOPSelf < (sOPTarg - sTrgDlt) * 1.0001 {
-			write_screen("Intercept burn", true).
+			write_screen("Intercept (burn)", true).
 		}
 	} else {
 		// Target is behind
 		lock steering to lookDirUp(prograde:vector, up:vector).
 		// Wait for orientation
 		until vAng(SHIP:facing:vector, prograde:vector) < 0.5 {
-			write_screen("Face Prograde", true).
+			write_screen("Facing prograde", true).
 		}
 		lock throttle to 0.4.
 		until sOPSelf > (sOPTarg + sTrgDlt) * 0.9999 {
-			write_screen("Intercept burn", true).
+			write_screen("Intercept (burn)", true).
 		}
 	}
+
 	lock throttle to 0.
 	rcs off.
 	unlock steering.
-	set navMode to "orbit".
-	wait 0.1.
 	sas on.
 	wait 0.1.
 	set sasmode to "prograde".
 
 	local timIntcpt is time:seconds + sOPSelf.
-	until time:seconds > timIntcpt {
-		write_screen("Coast to intercept", false).
+	until time:seconds > timIntcpt and dockTrg:distance > mDistRndv {
+		write_screen("Intercept (" + round(time:seconds - timIntcpt, 0) + ")", true).
 	}
 
 }
 
-// Stage: MATCHING VELOCITY
-set navMode to "target".
-
-// Stage: CLOSING DISTANCE
+// Stage: CLOSING
+rcs on.
 set SHIP:control:fore to 0.
-lock axsRelTrg to vcrs(vecSS2Trg, target:position).
-set mOldTDist to target:distance.
 
-until target:distance < 300 {
+until dockTrg:distance < mDistDock {
 
-	lock steering to vecSS2Trg.
-	set SHIP:control:fore to -1.
-	until vecSS2Trg:mag < 2 {
+	set SHIP:control:fore to 0.
+	lock throttle to 0.
+	lock steering to vecTrg2SS.
+	until vAng(SHIP:facing:vector, vecTrg2SS) < 1 {
+		write_screen("Facing Rel:retro", true).
+	}
+	lock throttle to 0.4.
+	until vecSS2Trg:mag < 1 {
 		write_screen("Matching velocity", true).
 	}
 
-	lock rotRelTrg to angleAxis(degRelTrg, axsRelTrg).
-	lock steering to rotRelTrg * prograde:vector.
-	until vAng(SHIP:facing:vector, rotRelTrg * prograde:vector) < 1 {
-		write_screen("Adjusting attitude", true).
+	lock throttle to 0.
+	lock steering to dockTrg:position.
+	until vAng(SHIP:facing:vector, dockTrg:position) < 1 {
+		write_screen("Facing target", true).
 	}
 	set SHIP:control:fore to 1.
-	until vecSS2Trg:mag > 20 or target:distance < 300 {
-		write_screen("Closing distance", true).
-	}
-
-	set SHIP:control:fore to 0.
-	lock rotRelTrg to angleAxis(0 - degRelTrg, axsRelTrg).
-	until vAng(SHIP:facing:vector, rotRelTrg * prograde:vector) < 1 {
-		write_screen("Adjusting attitude", true).
-	}
-	set SHIP:control:fore to -1.
-	until vecSS2Trg:mag < 12 or target:distance < 300 {
-		write_screen("Closing distance", true).
+	until vecSS2Trg:mag > 10 or dockTrg:distance < mDistDock {
+		write_screen("Closing (RCS)", true).
 	}
 
 	rcs off.
-	until target:distance > mOldTDist or target:distance < 300 {
-		write_screen("Coasting", true).
-		set mOldTDist to target:distance.
+	until degRelTrg > 90 or dockTrg:distance < mDistDock {
+		write_screen("Closing (coast)", true).
 	}
 	rcs on.
 
 }
 
-lock steering to vecSS2Trg.
-set SHIP:control:fore to -1.
-until vecSS2Trg:mag < 0.2 {
-	write_screen("Matching velocity", true).
-}
+// Stage: ALIGN BODY
+for ptRaptorVac in arrRaptorVac { ptRaptorVac:shutdown. }
 
 set SHIP:control:fore to 0.
+lock steering to vecSS2Trg.
+until vAng(SHIP:facing:vector, vecSS2Trg) < 1 {
+	write_screen("Facing Rel:retro", true).
+}
+set SHIP:control:fore to -1.
+until vecSS2Trg:mag < 0.5 {
+	write_screen("Matching velocity", true).
+}
+set SHIP:control:fore to 0.
 
-lock axsTrgFac to vcrs(target:position, target:facing:vector).
+lock axsTrgFac to vcrs(dockTrg:position, dockTrg:facing:vector).
 lock rotTrgFac to angleAxis(90, axsTrgFac).
-lock steering to lookDirUp(rotTrgFac * target:position, target:position).
+lock steering to lookDirUp(rotTrgFac * dockTrg:position, dockTrg:position).
 
-until vAng(SHIP:facing:vector, rotTrgFac * target:position) < 1 {
-	write_screen("Adjusting attitude", true).
+for pt in dockTrg:parts {
+	if pt:name:startswith("SEP.RAPTOR.VAC") { set ptTrgVac to pt. }
 }
 
-set SHIP:control:top to 1.
-until vecSS2Trg:mag > 2 {
+// Set up vectors for alignment
+lock vecRaptors to (ptTrgVac:position - arrRaptorVac[0]:position).
+lock vecXPort to vxcl(dockTrg:facing:vector, SHIP:facing:starvector).
+lock vecXTarg to vxcl(dockTrg:facing:vector, dockTrg:position).
+lock degXPort to vAng(vecXPort, vecXTarg).
+lock vecYPort to vxcl(dockTrg:facing:starvector, SHIP:facing:forevector).
+lock vecYTarg to vxcl(dockTrg:facing:starvector, vecRaptors).
+lock degYPort to vAng(vecYPort, vecYTarg).
+
+until degTrgNos < 0.5 {
+	write_screen("Aligning body", true).
+}
+
+until abs(degXPort - 90) < 0.5 {
+	write_screen("Rotating dock port", true).
+}
+
+// Stage: DOCKING
+set vecHldNos to SHIP:facing:vector.
+set vecHldPrt to SHIP:facing:topvector.
+lock steering to lookDirUp(vecHldNos, vecHldPrt). // Hold current attitude
+
+// Lock XYZ values for docking
+lock mDockDltX to dockTrg:distance * tan(degXPort - 90).
+lock mDockDltY to dockTrg:distance * tan(degYPort - 90).
+lock mDockDltZ to dockTrg:distance - 8.98.
+
+set pidX to pidLoop(0.2, 0.001, 3, -1, 1).
+set pidX:setpoint to 0.
+set pidY to pidLoop(0.2, 0.001, 3, -1, 1).
+set pidY:setpoint to 0.
+set pidZ to pidLoop(0.1, 0.001, 2, -1, 1).
+set pidZ:setpoint to 0.
+
+local tCurMass is SHIP:mass.
+
+until SHIP:mass > tCurMass {
 	write_screen("Final approach", true).
+	set SHIP:control:starboard to pidX:update(time:seconds, mDockDltX).
+	set SHIP:control:fore to pidY:update(time:seconds, mDockDltY).
+	set SHIP:control:top to 0 - pidZ:update(time:seconds, mDockDltZ).
 }
-set SHIP:control:top to 0.
 
-// until target:distance < 50 {
-// 	write_screen("Final approach", true).
-// }
-
+// Stage: Fuel transfer
+unlock steering.
+rcs off.
 until false {
-	write_screen("Final approach", true).
+	write_screen("Fuel transfer", true).
 }

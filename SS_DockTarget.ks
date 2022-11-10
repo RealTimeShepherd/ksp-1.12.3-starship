@@ -1,10 +1,14 @@
 
+list targets in targs.
+for targ in targs {
+	if targ:distance < 10000 {
+		set docker to targ.
+	}
+}
+
 //---------------------------------------------------------------------------------------------------------------------
 // #region GLOBALS
 //---------------------------------------------------------------------------------------------------------------------
-
-// Logfile
-global log is "Telemetry/ss_docktarget.csv".
 
 // Arrays for flaps and engines
 global arrSSFlaps is list().
@@ -46,7 +50,6 @@ if defined ptSSHeader {
 // Bind to modules & resources within StarShip Command
 if defined ptSSCommand {
 	set mdSSCMRCS to ptSSCommand:getmodule("ModuleRCSFX").
-	set mdSSCommand to ptSSCommand:getmodule("ModuleCommand").
 	// Bind to command tanks
 	for rsc in ptSSCommand:resources {
 		if rsc:name = "LqdOxygen" { set rsCMLOX to rsc. }
@@ -57,7 +60,6 @@ if defined ptSSCommand {
 // Bind to modules & resources within StarShip Body
 if defined ptSSBody {
 	set mdSSBDRCS to ptSSBody:getmodule("ModuleRCSFX").
-	set mdSSBDDN to ptSSBody:getmodule("ModuleDockingNode").
 	// Bind to command tanks
 	for rsc in ptSSBody:resources {
 		if rsc:name = "LqdOxygen" { set rsBDLOX to rsc. }
@@ -94,43 +96,33 @@ for ptSolarPanel in arrSolarPanels {
 // #region LOCKS
 //---------------------------------------------------------------------------------------------------------------------
 
+lock degTrgNos to vAng(SHIP:facing:vector, docker:facing:vector).
+lock vecXPort to vxcl(docker:facing:vector, SHIP:facing:topvector).
+lock vecXTarg to vxcl(docker:facing:vector, docker:position).
+lock degXPort to vAng(vecXPort, vecXTarg).
+
 //---------------------------------------------------------------------------------------------------------------------
 // #endregion
 //---------------------------------------------------------------------------------------------------------------------
 // #region FUNCTIONS
 //---------------------------------------------------------------------------------------------------------------------
 
-function write_console { // Write unchanging display elements and header line of new CSV file
+function write_console { // Write unchanging display elements
 	clearScreen.
 	print "Phase:        " at (0, 0).
 	print "----------------------------" at (0, 1).
-
-	deletePath(log).
-	local logline is "MET,".
-	set logline to logline + "Phase,".
-	log logline to log.
+	print "Nose angle:              deg" at (0, 2).
+	print "Port angle:              deg" at (0, 3).
+	print "Target dist:               m" at (0, 4).
 }
 
-function write_screen { // Write dynamic display elements and write telemetry to logfile
+function write_screen { // Write dynamic display elements
 	parameter phase.
-	parameter writelog.
 	print phase + "        " at (14, 0).
 	// print "----------------------------".
-
-	if writelog = true {
-		local logline is round(missionTime, 1) + ",".
-		set logline to logline + phase + ",".
-		log logline to log.
-	}
-}
-
-function target_is_vessel { // Is parameter a valid target
-	parameter testTrg.
-	list targets in targetlist.
-	for trg in targetlist {
-		if trg:name = testTrg { return true. }
-	}
-	return false.
+	print round(degTrgNos, 2) + "    " at (14, 2).
+	print round(degXPort, 2) + "    " at (14, 3).
+	print round(docker:distance, 0) + "    " at (14, 4).
 }
 
 //---------------------------------------------------------------------------------------------------------------------
@@ -189,20 +181,24 @@ write_console().
 // #region FLIGHT
 //---------------------------------------------------------------------------------------------------------------------
 
-list targets in targs.
-for targ in targs {
-	if targ:distance < 10000 {
-		set docker to targ.
-	}
-}
-
 until docker:distance < 500 {
-	write_screen("Waiting", true).
+	write_screen("Waiting").
 }
 
 rcs on.
 lock steering to lookDirUp(docker:facing:vector, docker:position).
 
-until false {
-	write_screen("Facing dock target", true).
+until degTrgNos < 0.5 {
+	write_screen("Aligning body").
 }
+
+until degXPort < 0.5 {
+	write_screen("Rotating dock port").
+}
+
+local tCurMass is SHIP:mass.
+until SHIP:mass > tCurMass {
+	write_screen("Holding station").
+}
+
+// end script

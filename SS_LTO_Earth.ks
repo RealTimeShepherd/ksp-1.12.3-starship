@@ -306,6 +306,15 @@ function calculate_pitch { // Adjust pitch by increments depending upon when ver
 	}
 }
 
+function target_is_vessel { // Is parameter a valid target
+	parameter testTrg.
+	list targets in targetlist.
+	for trg in targetlist {
+		if trg:name = testTrg { return true. }
+	}
+	return false.
+}
+
 //---------------------------------------------------------------------------------------------------------------------
 // #endregion
 //---------------------------------------------------------------------------------------------------------------------
@@ -470,6 +479,10 @@ local timeWait is time:seconds + 4.
 until time:seconds > timeWait {
 	write_screen("Orbit attained", true).
 	set sasmode to "prograde".
+}
+
+if target_is_vessel(target:name) {
+	runPath("SS_RVD_LEO.ks", target:name).
 }
 
 //---------------------------------------------------------------------------------------------------------------------

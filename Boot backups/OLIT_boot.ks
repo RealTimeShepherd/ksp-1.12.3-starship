@@ -3,6 +3,10 @@ print "Waiting for ship to unpack.".
 wait until SHIP:unpacked.
 print "Ship is now unpacked.".
 
+global pad is latlng(25.9669968, -97.1416771).
+global catch is 0.
+lock mDist to 0.
+
 function write_console {
 	
 	clearScreen.
@@ -38,15 +42,11 @@ wait until ship:unpacked.
 // Bind to MechaZilla
 for pt in SHIP:parts {
 	if pt:name:startswith("SLE.SS.OLIT.MZ") { set ptMZ to pt. }
-	if pt:name:startswith("SLE.SS.OLP") { set ptOLP to pt. }
 }
 
 // Bind to modules within MechaZilla
 if defined ptMZ {
-	set mdVrtMove to ptMZ:getmodulebyindex(1).
 	set mdArmMove to ptMZ:getmodulebyindex(6).
-	set mdPshMove to ptMZ:getmodulebyindex(7).
-	set mdStbMove to ptMZ:getmodulebyindex(8).
 }
 if mdArmMove:hasevent("open arms") { mdArmMove:doevent("open arms"). }
 
@@ -68,7 +68,6 @@ if SHIP:Name <> "Tanker StarShip" and SHIP:Name <> "Crew StarShip" {
 
 	lock vecCatch to vxcl(up:vector, catch:position).
 	lock mDist to (vecCatch - vxcl(up:vector, SHIP:geoposition:position)):mag.
-	global pad is latlng(25.9669968, -97.1416771).
 	
 	write_console().
 	until mDist < 20 and catch:altitude < 280 { write_screen("Waiting to catch " + catch:Name). }

@@ -1,4 +1,8 @@
 
+print "Waiting for ship to unpack.".
+wait until SHIP:unpacked.
+print "Ship is now unpacked.".
+
 function write_console {
 	
 	clearScreen.

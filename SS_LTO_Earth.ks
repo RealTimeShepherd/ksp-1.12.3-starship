@@ -4,14 +4,14 @@
 //---------------------------------------------------------------------------------------------------------------------
 
 // Logfile
-global log is "Telemetry/ss_lto_earth_log.csv".
+global log_sle is "Telemetry/ss_lto_earth_log.csv".
 
 // Arrays for flaps and engines
-global arrSSFlaps is list().
-global arrRaptorVac is list().
-global arrRaptorSL is list().
-global arrSolarPanels is list().
-global arrSPModules is list().
+global arrSSFlaps_sle is list().
+global arrRaptorVac_sle is list().
+global arrRaptorSL_sle is list().
+global arrSolarPanels_sle is list().
+global arrSPModules_sle is list().
 
 // Set target orbit values
 global mAPTrg is 500000. // Target apogee
@@ -57,9 +57,9 @@ for pt in SHIP:parts {
 	if pt:name:startswith("SEP.S20.FWD.RIGHT") { set ptFlapFR to pt. }
 	if pt:name:startswith("SEP.S20.AFT.LEFT") { set ptFlapAL to pt. }
 	if pt:name:startswith("SEP.S20.AFT.RIGHT") { set ptFlapAR to pt. }
-	if pt:name:startswith("SEP.RAPTOR.VAC") { arrRaptorVac:add(pt). }
-	if pt:name:startswith("SEP.RAPTOR.SL") { arrRaptorSL:add(pt). }
-	if pt:name:startswith("nfs-panel-deploying-blanket-arm-1") { arrSolarPanels:add(pt). }
+	if pt:name:startswith("SEP.RAPTOR.VAC") { arrRaptorVac_sle:add(pt). }
+	if pt:name:startswith("SEP.RAPTOR.SL") { arrRaptorSL_sle:add(pt). }
+	if pt:name:startswith("nfs-panel-deploying-blanket-arm-1") { arrSolarPanels_sle:add(pt). }
 }
 
 // Bind to resources within StarShip Header
@@ -74,7 +74,6 @@ if defined ptSSHeader {
 // Bind to modules & resources within StarShip Command
 if defined ptSSCommand {
 	set mdSSCMRCS to ptSSCommand:getmodule("ModuleRCSFX").
-	set mdSSCommand to ptSSCommand:getmodule("ModuleCommand").
 	// Bind to command tanks
 	for rsc in ptSSCommand:resources {
 		if rsc:name = "LqdOxygen" { set rsCMLOX to rsc. }
@@ -85,7 +84,6 @@ if defined ptSSCommand {
 // Bind to modules & resources within StarShip Body
 if defined ptSSBody {
 	set mdSSBDRCS to ptSSBody:getmodule("ModuleRCSFX").
-	set mdSSBDDN to ptSSBody:getmodule("ModuleDockingNode").
 	// Bind to command tanks
 	for rsc in ptSSBody:resources {
 		if rsc:name = "LqdOxygen" { set rsBDLOX to rsc. }
@@ -96,24 +94,24 @@ if defined ptSSBody {
 // Bind to modules within StarShip Flaps
 if defined ptFlapFL {
 	set mdFlapFLCS to ptFlapFL:getmodule("ModuleSEPControlSurface").
-	arrSSFlaps:add(mdFlapFLCS).
+	arrSSFlaps_sle:add(mdFlapFLCS).
 }
 if defined ptFlapFR {
 	set mdFlapFRCS to ptFlapFR:getmodule("ModuleSEPControlSurface").
-	arrSSFlaps:add(mdFlapFRCS).
+	arrSSFlaps_sle:add(mdFlapFRCS).
 }
 if defined ptFlapAL {
 	set mdFlapALCS to ptFlapAL:getmodule("ModuleSEPControlSurface").
-	arrSSFlaps:add(mdFlapALCS).
+	arrSSFlaps_sle:add(mdFlapALCS).
 }
 if defined ptFlapAR {
 	set mdFlapARCS to ptFlapAR:getmodule("ModuleSEPControlSurface").
-	arrSSFlaps:add(mdFlapARCS).
+	arrSSFlaps_sle:add(mdFlapARCS).
 }
 
 // Bind to modules within solar panels
-for ptSolarPanel in arrSolarPanels {
-	arrSPModules:add(ptSolarPanel:getmodule("ModuleDeployableSolarPanel")).
+for ptSolarPanel in arrSolarPanels_sle {
+	arrSPModules_sle:add(ptSolarPanel:getmodule("ModuleDeployableSolarPanel")).
 }
 
 //---------------------------------------------------------------------------------------------------------------------
@@ -142,7 +140,7 @@ if defined rsCMCH4 {
 // #region FUNCTIONS
 //---------------------------------------------------------------------------------------------------------------------
 
-function write_console { // Write unchanging display elements and header line of new CSV file
+function write_console_sle { // Write unchanging display elements and header line of new CSV file
 	clearScreen.
 	print "Phase:        " at (0, 0).
 	print "----------------------------" at (0, 1).
@@ -167,7 +165,7 @@ function write_console { // Write unchanging display elements and header line of
 	print "Propellant:                l" at (0, 20).
 	print "Throttle:                  %" at (0, 21).
 
-	deletePath(log).
+	deletePath(log_sle).
 	local logline is "MET,".
 	set logline to logline + "Phase,".
 	set logline to logline + "Altitude,".
@@ -186,10 +184,10 @@ function write_console { // Write unchanging display elements and header line of
 	set logline to logline + "Ship mass,".
 	set logline to logline + "Propellant,".
 	set logline to logline + "Throttle,".
-	log logline to log.
+	log logline to log_sle.
 }
 
-function write_screen { // Write dynamic display elements and write telemetry to logfile
+function write_screen_sle { // Write dynamic display elements and write telemetry to logfile
 	parameter phase.
 	parameter writelog.
 	print phase + "        " at (14, 0).
@@ -234,7 +232,7 @@ function write_screen { // Write dynamic display elements and write telemetry to
 		set logline to logline + round(SHIP:mass, 2) + ",".
 		set logline to logline + round(klProp, 0) + ",".
 		set logline to logline + round(throttle * 100, 2) + ",".
-		log logline to log.
+		log logline to log_sle.
 	}
 }
 
@@ -322,7 +320,7 @@ function target_is_vessel { // Is parameter a valid target
 //---------------------------------------------------------------------------------------------------------------------
 
 // Retract Solar Panels
-for mdSP in arrSPModules { mdSP:doaction("retract solar panel", true). }
+for mdSP in arrSPModules_sle { mdSP:doaction("retract solar panel", true). }
 
 // Enable RCS modules
 mdSSCMRCS:setfield("rcs", true).
@@ -349,13 +347,13 @@ if defined rsBDCH4 { set rsBDCH4:enabled to true. }
 lock throttle to 0.
 
 // Shut down sea level Raptors
-for ptRaptorSL in arrRaptorSL { ptRaptorSL:shutdown. }
+for ptRaptorSL in arrRaptorSL_sle { ptRaptorSL:shutdown. }
 
 // Shut down vacuum Raptors
-for ptRaptorVac in arrRaptorVac { ptRaptorVac:shutdown. }
+for ptRaptorVac in arrRaptorVac_sle { ptRaptorVac:shutdown. }
 
 // Set flaps to launch position
-for mdSSFlap in arrSSFlaps {
+for mdSSFlap in arrSSFlaps_sle {
 	// Disable manual control
 	mdSSFlap:setfield("pitch", true).
 	mdSSFlap:setfield("yaw", true).
@@ -366,7 +364,7 @@ for mdSSFlap in arrSSFlaps {
 	mdSSFlap:setfield("deploy", true).
 }
 
-write_console().
+write_console_sle().
 
 //---------------------------------------------------------------------------------------------------------------------
 // #endregion
@@ -378,12 +376,12 @@ if SHIP:status = "PRELAUNCH" {
 
 	// Stage: PRE-LAUNCH
 	until SHIP:verticalspeed > 0.1 {
-		write_screen("Pre-launch", false).
+		write_screen_sle("Pre-launch", false).
 	}
 
 	// Stage: ON BOOSTER
 	until onBooster = false {
-		write_screen("On Booster", true).
+		write_screen_sle("On Booster", true).
 		set onBooster to false.
 		for pt in SHIP:parts {
 			if pt:name:startswith("SEP.B4.INTER") { set onBooster to true. }
@@ -391,13 +389,13 @@ if SHIP:status = "PRELAUNCH" {
 	}
 
 	// Stage: STAGE
-	for ptRaptorSL in arrRaptorSL { ptRaptorSL:activate. }
-	for ptRaptorVac in arrRaptorVac { ptRaptorVac:activate. }
+	for ptRaptorSL in arrRaptorSL_sle { ptRaptorSL:activate. }
+	for ptRaptorVac in arrRaptorVac_sle { ptRaptorVac:activate. }
 	lock throttle to 1.
 	local timeStage is time:seconds + 4.
 
 	until time:seconds > timeStage {
-		write_screen("Stage", true).
+		write_screen_sle("Stage", true).
 	}
 
 	// Stage: ASCENT
@@ -405,7 +403,7 @@ if SHIP:status = "PRELAUNCH" {
 	set mpsVrtTrg to calculate_tvspd().
 
 	until sToTrgVel < sToOrbIns {
-		write_screen("Ascent", true).
+		write_screen_sle("Ascent", true).
 		set mpsVrtTrg to calculate_tvspd().
 		set degPitTrg to calculate_pitch().
 		set degYawTrg to pidYaw:update(time:seconds, degTarDlt).
@@ -413,7 +411,7 @@ if SHIP:status = "PRELAUNCH" {
 
 	// Stage: ORBITAL INSERTION
 	until SHIP:orbit:apoapsis > (mAPTrg * 0.9) {
-		write_screen("Orbital insertion", true).
+		write_screen_sle("Orbital insertion", true).
 		set mpsVrtTrg to calculate_tvspd().
 		set degPitTrg to calculate_pitch().
 		set degYawTrg to pidYaw:update(time:seconds, degTarDlt).
@@ -425,7 +423,7 @@ if SHIP:status = "PRELAUNCH" {
 	lock throttle to 0.4.
 
 	until SHIP:orbit:apoapsis > (mAPTrg * 0.97) {
-		write_screen("Trim        ", true).
+		write_screen_sle("Trim        ", true).
 	}
 
 	lock throttle to 0.
@@ -433,16 +431,16 @@ if SHIP:status = "PRELAUNCH" {
 	set SHIP:control:fore to 1.
 
 	until SHIP:orbit:apoapsis > (mAPTrg * 0.999) {
-		write_screen("Trim", true).
+		write_screen_sle("Trim", true).
 		set SHIP:control:fore to max(1, (mAPTrg - SHIP:orbit:apoapsis) / (mAPTrg * 0.97)).
 	}
 
 }
 
 // Stage: COAST TO APOGEE
-for ptRaptorSL in arrRaptorSL { ptRaptorSL:shutdown. }
-for ptRaptorVac in arrRaptorVac { ptRaptorVac:shutdown. }
-for mdSP in arrSPModules { mdSP:doaction("extend solar panel", true). }
+for ptRaptorSL in arrRaptorSL_sle { ptRaptorSL:shutdown. }
+for ptRaptorVac in arrRaptorVac_sle { ptRaptorVac:shutdown. }
+for mdSP in arrSPModules_sle { mdSP:doaction("extend solar panel", true). }
 set SHIP:control:fore to 0.
 rcs off.
 unlock steering.
@@ -450,25 +448,25 @@ sas on.
 set sasmode to "prograde".
 
 until SHIP:orbit:eta:apoapsis < 4 {
-	write_screen("Coast to Apogee", true).
+	write_screen_sle("Coast to Apogee", true).
 	set sasmode to "prograde".
 }
 
 // Stage: CIRCULARISING
-for ptRaptorSL in arrRaptorSL { ptRaptorSL:activate. }
-for ptRaptorVac in arrRaptorVac { ptRaptorVac:activate. }
+for ptRaptorSL in arrRaptorSL_sle { ptRaptorSL:activate. }
+for ptRaptorVac in arrRaptorVac_sle { ptRaptorVac:activate. }
 sas off.
 lock steering to prograde.
 lock throttle to 1.
 rcs on.
 
 until (SHIP:orbit:apoapsis + SHIP:orbit:periapsis) > (mAPTrg * 1.99) {
-	write_screen("Circularising", true).
+	write_screen_sle("Circularising", true).
 }
 
 // Stage: ORBIT ATTAINED
-for ptRaptorSL in arrRaptorSL { ptRaptorSL:shutdown. }
-for ptRaptorVac in arrRaptorVac { ptRaptorVac:shutdown. }
+for ptRaptorSL in arrRaptorSL_sle { ptRaptorSL:shutdown. }
+for ptRaptorVac in arrRaptorVac_sle { ptRaptorVac:shutdown. }
 lock throttle to 0.
 unlock steering.
 rcs off.
@@ -477,7 +475,7 @@ set sasmode to "prograde".
 local timeWait is time:seconds + 4.
 
 until time:seconds > timeWait {
-	write_screen("Orbit attained", true).
+	write_screen_sle("Orbit attained", true).
 	set sasmode to "prograde".
 }
 

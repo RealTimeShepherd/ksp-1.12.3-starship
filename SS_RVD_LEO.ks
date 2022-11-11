@@ -11,7 +11,7 @@ for targ in targs {
 //---------------------------------------------------------------------------------------------------------------------
 
 // Logfile
-global log is "Telemetry/ss_rvd_leo.csv".
+global log_srl is "Telemetry/ss_rvd_leo.csv".
 
 global mDistRndv is 5000. // Distance for rendezvous
 global mDistDock is 300. // Distance for docking
@@ -20,11 +20,11 @@ global vecHldNos is 0. // Vector to hold attitude when docking
 global vecHldPrt is 0. // Vector to hold attitude when docking
 
 // Arrays for flaps and engines
-global arrSSFlaps is list().
-global arrRaptorVac is list().
-global arrRaptorSL is list().
-global arrSolarPanels is list().
-global arrSPModules is list().
+global arrSSFlaps_srl is list().
+global arrRaptorVac_srl is list().
+global arrRaptorSL_srl is list().
+global arrSolarPanels_srl is list().
+global arrSPModules_srl is list().
 
 //---------------------------------------------------------------------------------------------------------------------
 // #endregion
@@ -42,9 +42,9 @@ for pt in SHIP:parts {
 	if pt:name:startswith("SEP.S20.FWD.RIGHT") { set ptFlapFR to pt. }
 	if pt:name:startswith("SEP.S20.AFT.LEFT") { set ptFlapAL to pt. }
 	if pt:name:startswith("SEP.S20.AFT.RIGHT") { set ptFlapAR to pt. }
-	if pt:name:startswith("SEP.RAPTOR.VAC") { arrRaptorVac:add(pt). }
-	if pt:name:startswith("SEP.RAPTOR.SL") { arrRaptorSL:add(pt). }
-	if pt:name:startswith("nfs-panel-deploying-blanket-arm-1") { arrSolarPanels:add(pt). }
+	if pt:name:startswith("SEP.RAPTOR.VAC") { arrRaptorVac_srl:add(pt). }
+	if pt:name:startswith("SEP.RAPTOR.SL") { arrRaptorSL_srl:add(pt). }
+	if pt:name:startswith("nfs-panel-deploying-blanket-arm-1") { arrSolarPanels_srl:add(pt). }
 }
 
 // Bind to resources within StarShip Header
@@ -59,7 +59,6 @@ if defined ptSSHeader {
 // Bind to modules & resources within StarShip Command
 if defined ptSSCommand {
 	set mdSSCMRCS to ptSSCommand:getmodule("ModuleRCSFX").
-	set mdSSCommand to ptSSCommand:getmodule("ModuleCommand").
 	// Bind to command tanks
 	for rsc in ptSSCommand:resources {
 		if rsc:name = "LqdOxygen" { set rsCMLOX to rsc. }
@@ -70,7 +69,6 @@ if defined ptSSCommand {
 // Bind to modules & resources within StarShip Body
 if defined ptSSBody {
 	set mdSSBDRCS to ptSSBody:getmodule("ModuleRCSFX").
-	set mdSSBDDN to ptSSBody:getmodule("ModuleDockingNode").
 	// Bind to command tanks
 	for rsc in ptSSBody:resources {
 		if rsc:name = "LqdOxygen" { set rsBDLOX to rsc. }
@@ -81,24 +79,24 @@ if defined ptSSBody {
 // Bind to modules within StarShip Flaps
 if defined ptFlapFL {
 	set mdFlapFLCS to ptFlapFL:getmodule("ModuleSEPControlSurface").
-	arrSSFlaps:add(mdFlapFLCS).
+	arrSSFlaps_srl:add(mdFlapFLCS).
 }
 if defined ptFlapFR {
 	set mdFlapFRCS to ptFlapFR:getmodule("ModuleSEPControlSurface").
-	arrSSFlaps:add(mdFlapFRCS).
+	arrSSFlaps_srl:add(mdFlapFRCS).
 }
 if defined ptFlapAL {
 	set mdFlapALCS to ptFlapAL:getmodule("ModuleSEPControlSurface").
-	arrSSFlaps:add(mdFlapALCS).
+	arrSSFlaps_srl:add(mdFlapALCS).
 }
 if defined ptFlapAR {
 	set mdFlapARCS to ptFlapAR:getmodule("ModuleSEPControlSurface").
-	arrSSFlaps:add(mdFlapARCS).
+	arrSSFlaps_srl:add(mdFlapARCS).
 }
 
 // Bind to modules within solar panels
-for ptSolarPanel in arrSolarPanels {
-	arrSPModules:add(ptSolarPanel:getmodule("ModuleDeployableSolarPanel")).
+for ptSolarPanel in arrSolarPanels_srl {
+	arrSPModules_srl:add(ptSolarPanel:getmodule("ModuleDeployableSolarPanel")).
 }
 
 //---------------------------------------------------------------------------------------------------------------------
@@ -123,7 +121,7 @@ lock mDockDltZ to 0. // Z delta - used for docking
 // #region FUNCTIONS
 //---------------------------------------------------------------------------------------------------------------------
 
-function write_console { // Write unchanging display elements and header line of new CSV file
+function write_console_srl { // Write unchanging display elements and header line of new CSV file
 	clearScreen.
 	print "Phase:        " at (0, 0).
 	print "----------------------------" at (0, 1).
@@ -135,7 +133,7 @@ function write_console { // Write unchanging display elements and header line of
 	print "Dock Port Y:               m" at (0, 7).
 	print "Dock Port Z:               m" at (0, 8).
 
-	deletePath(log).
+	deletePath(log_srl).
 	local logline is "MET,".
 	set logline to logline + "Phase,".
 	set logline to logline + "Relative vel,".
@@ -144,10 +142,10 @@ function write_console { // Write unchanging display elements and header line of
 	set logline to logline + "Dock Port X,".
 	set logline to logline + "Dock Port Y,".
 	set logline to logline + "Dock Port Z,".
-	log logline to log.
+	log logline to log_srl.
 }
 
-function write_screen { // Write dynamic display elements and write telemetry to logfile
+function write_screen_srl { // Write dynamic display elements and write telemetry to logfile
 	parameter phase.
 	parameter writelog.
 	print phase + "        " at (14, 0).
@@ -165,7 +163,7 @@ function write_screen { // Write dynamic display elements and write telemetry to
 		set logline to logline + round(vecSS2Trg:mag, 1) + ",".
 		set logline to logline + round(degRelTrg, 2) + ",".
 		set logline to logline + round(dockTrg:distance, 0) + ",".
-		log logline to log.
+		log logline to log_srl.
 	}
 }
 
@@ -200,13 +198,13 @@ if defined rsBDCH4 { set rsBDCH4:enabled to true. }
 lock throttle to 0.
 
 // Shut down sea level Raptors
-for ptRaptorSL in arrRaptorSL { ptRaptorSL:shutdown. }
+for ptRaptorSL in arrRaptorSL_srl { ptRaptorSL:shutdown. }
 
 // Shut down vacuum Raptors
-for ptRaptorVac in arrRaptorVac { ptRaptorVac:shutdown. }
+for ptRaptorVac in arrRaptorVac_srl { ptRaptorVac:shutdown. }
 
 // Set flaps to default position
-for mdSSFlap in arrSSFlaps {
+for mdSSFlap in arrSSFlaps_srl {
 	// Disable manual control
 	mdSSFlap:setfield("pitch", true).
 	mdSSFlap:setfield("yaw", true).
@@ -217,7 +215,7 @@ for mdSSFlap in arrSSFlaps {
 	mdSSFlap:setfield("deploy", true).
 }
 
-write_console().
+write_console_srl().
 
 //---------------------------------------------------------------------------------------------------------------------
 // #endregion
@@ -226,7 +224,7 @@ write_console().
 //---------------------------------------------------------------------------------------------------------------------
 
 // Activate vacuum Raptors
-for ptRaptorVac in arrRaptorVac { ptRaptorVac:activate. }
+for ptRaptorVac in arrRaptorVac_srl { ptRaptorVac:activate. }
 
 if dockTrg:distance > mDistRndv {
 
@@ -237,14 +235,14 @@ if dockTrg:distance > mDistRndv {
 	if degIncDlt > degOldID {
 		// Inclination delta is increasing
 		until degIncDlt < degOldID {
-			write_screen("Waiting for node", true).
+			write_screen_srl("Waiting for node", true).
 			set degOldID to degIncDlt.
 			wait 1.
 		}
 	} else {
 		// Inclination delta is decreasing
 		until degIncDlt > degOldID {
-			write_screen("Waiting for node", true).
+			write_screen_srl("Waiting for node", true).
 			set degOldID to degIncDlt.
 			wait 1.
 		}
@@ -260,22 +258,22 @@ if dockTrg:distance > mDistRndv {
 		lock steering to lookDirUp(retrograde:vector, up:vector).
 		// Wait for orientation
 		until vAng(SHIP:facing:vector, retrograde:vector) < 0.5 {
-			write_screen("Facing retrograde", true).
+			write_screen_srl("Facing retrograde", true).
 		}
 		lock throttle to 0.4.
 		until sOPSelf < (sOPTarg - sTrgDlt) * 1.0001 {
-			write_screen("Intercept (burn)", true).
+			write_screen_srl("Intercept (burn)", true).
 		}
 	} else {
 		// Target is behind
 		lock steering to lookDirUp(prograde:vector, up:vector).
 		// Wait for orientation
 		until vAng(SHIP:facing:vector, prograde:vector) < 0.5 {
-			write_screen("Facing prograde", true).
+			write_screen_srl("Facing prograde", true).
 		}
 		lock throttle to 0.4.
 		until sOPSelf > (sOPTarg + sTrgDlt) * 0.9999 {
-			write_screen("Intercept (burn)", true).
+			write_screen_srl("Intercept (burn)", true).
 		}
 	}
 
@@ -288,7 +286,7 @@ if dockTrg:distance > mDistRndv {
 
 	local timIntcpt is time:seconds + sOPSelf.
 	until time:seconds > timIntcpt and dockTrg:distance > mDistRndv {
-		write_screen("Intercept (" + round(time:seconds - timIntcpt, 0) + ")", true).
+		write_screen_srl("Intercept (" + round(time:seconds - timIntcpt, 0) + ")", true).
 	}
 
 }
@@ -303,42 +301,42 @@ until dockTrg:distance < mDistDock {
 	lock throttle to 0.
 	lock steering to vecTrg2SS.
 	until vAng(SHIP:facing:vector, vecTrg2SS) < 1 {
-		write_screen("Facing Rel:retro", true).
+		write_screen_srl("Facing Rel:retro", true).
 	}
 	lock throttle to 0.4.
 	until vecSS2Trg:mag < 1 {
-		write_screen("Matching velocity", true).
+		write_screen_srl("Matching velocity", true).
 	}
 
 	lock throttle to 0.
 	lock steering to dockTrg:position.
 	until vAng(SHIP:facing:vector, dockTrg:position) < 1 {
-		write_screen("Facing target", true).
+		write_screen_srl("Facing target", true).
 	}
 	set SHIP:control:fore to 1.
 	until vecSS2Trg:mag > 10 or dockTrg:distance < mDistDock {
-		write_screen("Closing (RCS)", true).
+		write_screen_srl("Closing (RCS)", true).
 	}
 
 	rcs off.
 	until degRelTrg > 90 or dockTrg:distance < mDistDock {
-		write_screen("Closing (coast)", true).
+		write_screen_srl("Closing (coast)", true).
 	}
 	rcs on.
 
 }
 
 // Stage: ALIGN BODY
-for ptRaptorVac in arrRaptorVac { ptRaptorVac:shutdown. }
+for ptRaptorVac in arrRaptorVac_srl { ptRaptorVac:shutdown. }
 
 set SHIP:control:fore to 0.
 lock steering to vecSS2Trg.
 until vAng(SHIP:facing:vector, vecSS2Trg) < 1 {
-	write_screen("Facing Rel:retro", true).
+	write_screen_srl("Facing Rel:retro", true).
 }
 set SHIP:control:fore to -1.
 until vecSS2Trg:mag < 0.5 {
-	write_screen("Matching velocity", true).
+	write_screen_srl("Matching velocity", true).
 }
 set SHIP:control:fore to 0.
 
@@ -351,7 +349,7 @@ for pt in dockTrg:parts {
 }
 
 // Set up vectors for alignment
-lock vecRaptors to (ptTrgVac:position - arrRaptorVac[0]:position).
+lock vecRaptors to (ptTrgVac:position - arrRaptorVac_srl[0]:position).
 lock vecXPort to vxcl(dockTrg:facing:vector, SHIP:facing:starvector).
 lock vecXTarg to vxcl(dockTrg:facing:vector, dockTrg:position).
 lock degXPort to vAng(vecXPort, vecXTarg).
@@ -360,11 +358,11 @@ lock vecYTarg to vxcl(dockTrg:facing:starvector, vecRaptors).
 lock degYPort to vAng(vecYPort, vecYTarg).
 
 until degTrgNos < 0.5 {
-	write_screen("Aligning body", true).
+	write_screen_srl("Aligning body", true).
 }
 
 until abs(degXPort - 90) < 0.5 {
-	write_screen("Rotating dock port", true).
+	write_screen_srl("Rotating dock port", true).
 }
 
 // Stage: DOCKING
@@ -387,7 +385,7 @@ set pidZ:setpoint to 0.
 local tCurMass is SHIP:mass.
 
 until SHIP:mass > tCurMass {
-	write_screen("Final approach", true).
+	write_screen_srl("Final approach", true).
 	set SHIP:control:starboard to pidX:update(time:seconds, mDockDltX).
 	set SHIP:control:fore to pidY:update(time:seconds, mDockDltY).
 	set SHIP:control:top to 0 - pidZ:update(time:seconds, mDockDltZ).
@@ -397,5 +395,5 @@ until SHIP:mass > tCurMass {
 unlock steering.
 rcs off.
 until false {
-	write_screen("Fuel transfer", true).
+	write_screen_srl("Fuel transfer", true).
 }

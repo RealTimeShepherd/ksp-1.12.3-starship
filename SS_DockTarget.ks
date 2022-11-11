@@ -107,7 +107,7 @@ lock degXPort to vAng(vecXPort, vecXTarg).
 // #region FUNCTIONS
 //---------------------------------------------------------------------------------------------------------------------
 
-function write_console { // Write unchanging display elements
+function write_console_sdt { // Write unchanging display elements
 	clearScreen.
 	print "Phase:        " at (0, 0).
 	print "----------------------------" at (0, 1).
@@ -116,7 +116,7 @@ function write_console { // Write unchanging display elements
 	print "Target dist:               m" at (0, 4).
 }
 
-function write_screen { // Write dynamic display elements
+function write_screen_sdt { // Write dynamic display elements
 	parameter phase.
 	print phase + "        " at (14, 0).
 	// print "----------------------------".
@@ -173,7 +173,7 @@ for mdSSFlap in arrSSFlaps {
 	mdSSFlap:setfield("deploy", true).
 }
 
-write_console().
+write_console_sdt().
 
 //---------------------------------------------------------------------------------------------------------------------
 // #endregion
@@ -182,23 +182,23 @@ write_console().
 //---------------------------------------------------------------------------------------------------------------------
 
 until docker:distance < 500 {
-	write_screen("Waiting").
+	write_screen_sdt("Waiting").
 }
 
 rcs on.
 lock steering to lookDirUp(docker:facing:vector, docker:position).
 
 until degTrgNos < 0.5 {
-	write_screen("Aligning body").
+	write_screen_sdt("Aligning body").
 }
 
 until degXPort < 0.5 {
-	write_screen("Rotating dock port").
+	write_screen_sdt("Rotating dock port").
 }
 
 local tCurMass is SHIP:mass.
 until SHIP:mass > tCurMass {
-	write_screen("Holding station").
+	write_screen_sdt("Holding station").
 }
 
 // end script

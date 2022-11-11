@@ -6,13 +6,13 @@ parameter launchTrg.
 //---------------------------------------------------------------------------------------------------------------------
 
 // Logfile
-global log is "Telemetry/sh_lbbc_earth_log.csv".
+global log_ble is "Telemetry/sh_lbbc_earth_log.csv".
 
 global pad is latlng(25.9669968, -97.1416771). // Tower Catch point - BC OLIT 1
 global degPadEnt is 262. // Heading when entering chopsticks
 global mTowerHgt is 235. // Tower height in metres
 global mltOffset is 1.5. // Multiplier for calculating offset target
-global mAltWP1 is 600. // Waypoints - ship will travel through these altitudes
+//global mAltWP1 is 600. // Waypoints - ship will travel through these altitudes
 global mAltWP2 is 300.
 global mAltWP4 is 200.5. // Tower Catch altitude - BC OLIT 1
 global mAltAP1 is 300. // Aim points - ship will aim at these altitudes
@@ -77,7 +77,6 @@ for pt in SHIP:parts {
 
 // Bind to modules within SuperHeavy Interstage
 if defined ptBInter {
-	set mdCommand to ptBInter:getmodule("ModuleCommand").
 	set mdDecouple to ptBInter:getmodule("ModuleDecouple").
 }
 
@@ -93,7 +92,6 @@ if defined ptBCore {
 
 // Bind to modules within Engine Cluster
 if defined ptEngClus {
-	set mdEngSwitch to ptEngClus:getmodule("ModuleTundraEngineSwitch").
 	set mdAllEngs to ptEngClus:getmodulebyindex(1).
 	set mdMidEngs to ptEngClus:getmodulebyindex(2).
 	set mdCntEngs to ptEngClus:getmodulebyindex(3).
@@ -157,7 +155,7 @@ lock mpsVrtTrg to 0.
 // #region FUNCTIONS
 //---------------------------------------------------------------------------------------------------------------------
 
-function write_console { // Write unchanging display elements and header line of new CSV file
+function write_console_ble { // Write unchanging display elements and header line of new CSV file
 	clearScreen.
 	print "Phase:        " at (0, 0).
 	print "----------------------------" at (0, 1).
@@ -179,7 +177,7 @@ function write_console { // Write unchanging display elements and header line of
 	print "Throttle:                  %" at (0, 17).
 	print "Target VSpd:             mps" at (0, 18).
 
-	deletePath(log).
+	deletePath(log_ble).
 	local logline is "MET,".
 	set logline to logline + "Phase,".
 	set logline to logline + "Altitude,".
@@ -195,10 +193,10 @@ function write_console { // Write unchanging display elements and header line of
 	set logline to logline + "Propellant,".
 	set logline to logline + "Throttle,".
 	set logline to logline + "Target VSpd,".
-	log logline to log.
+	log logline to log_ble.
 }
 
-function write_screen { // Write dynamic display elements and write telemetry to logfile
+function write_screen_ble { // Write dynamic display elements and write telemetry to logfile
 	parameter phase.
 	parameter writelog.
 	print phase + "               " at (14, 0).
@@ -237,7 +235,7 @@ function write_screen { // Write dynamic display elements and write telemetry to
 		set logline to logline + round(pctProp, 0) + ",".
 		set logline to logline + round(throttle * 100, 2) + ",".
 		set logline to logline + round(mpsVrtTrg, 0) + ",".
-		log logline to log.
+		log logline to log_ble.
 	}
 }
 
@@ -328,7 +326,7 @@ mdMidEngs:doaction("activate engine", true).
 wait 0.1.
 mdCntEngs:doaction("activate engine", true).
 
-write_console().
+write_console_ble().
 
 //---------------------------------------------------------------------------------------------------------------------
 // #endregion
@@ -344,13 +342,13 @@ if SHIP:status = "PRELAUNCH" {
 	if target_is_body(launchTrg) {
 		set target to launchTrg.
 		until degTrgInc < 0.3 {
-			write_screen("Pre-launch: - " + round(degTrgInc, 4), false).
+			write_screen_ble("Pre-launch: - " + round(degTrgInc, 4), false).
 		}
 	}
 	if target_is_vessel(launchTrg) { // Launch to circularise as close to target vessel as possible
 		set target to launchTrg.
 		until (target:distance / 1000) < (kmVesDst + (kmIncDst * degTrgInc)) and degTrgInc < degMaxInc {
-			write_screen("D:" + round((target:distance / 1000), 0) + "|I:" + round(degTrgInc, 2), false).
+			write_screen_ble("D:" + round((target:distance / 1000), 0) + "|I:" + round(degTrgInc, 2), false).
 		}
 	}
 
@@ -361,7 +359,7 @@ if SHIP:status = "PRELAUNCH" {
 	if mdQDSS:hasevent("Open") { mdQDSS:doevent("Open"). }
 
 	until mdAllEngs:getfield("thrust") > kNThrLaunch {
-		write_screen("Ignition", false).
+		write_screen_ble("Ignition", false).
 	}
 
 	// Stage: LIFT OFF
@@ -369,7 +367,7 @@ if SHIP:status = "PRELAUNCH" {
 	mdOLPClamp:doaction("Release clamp", true).
 
 	until SHIP:altitude > mGravTurn {
-		write_screen("Lift off", true).
+		write_screen_ble("Lift off", true).
 	}
 
 	// Stage: GRAVITY TURN
@@ -377,7 +375,7 @@ if SHIP:status = "PRELAUNCH" {
 	lock steering to lookDirUp(heading(90, degPitTrg):vector, up:vector).
 
 	until pctProp < pctMinProp {
-		write_screen("Gravity turn", true).
+		write_screen_ble("Gravity turn", true).
 	}
 
 	// Stage: STAGE
@@ -392,7 +390,7 @@ if SHIP:status = "PRELAUNCH" {
 
 	local timeStage is time:seconds + 4.
 	until time:seconds > timeStage {
-		write_screen("Stage", true).
+		write_screen_ble("Stage", true).
 	}
 
 	// Stage: BEGIN FLIP
@@ -405,7 +403,7 @@ if SHIP:status = "PRELAUNCH" {
 	set SHIP:control:pitch to 1. // Begin pitch over
 
 	until mdCntEngs:getfield("propellant") = "Very Stable (100.00 %)" {
-		write_screen("Begin flip", true).
+		write_screen_ble("Begin flip", true).
 	}
 
 	// Stage: FLIP
@@ -414,7 +412,7 @@ if SHIP:status = "PRELAUNCH" {
 	local headBB is heading_of_vector(srfRetrograde:vector).
 
 	until vAng(SHIP:facing:vector, heading(headBB, 0):vector) < 30 {
-		write_screen("Flip", true).
+		write_screen_ble("Flip", true).
 	}
 
 	// Stage: BOOSTBACK
@@ -429,7 +427,7 @@ if SHIP:status = "PRELAUNCH" {
 	lock steering to lookdirup(heading(headBB, 0):vector, heading(0, -90):vector). // Aim at horizon in direction of retrograde
 
 	until abs(degBerPad) < 20 {
-		write_screen("Boostback", true).
+		write_screen_ble("Boostback", true).
 		// set navMode to "Surface".
 	}
 
@@ -445,7 +443,7 @@ if SHIP:status = "PRELAUNCH" {
 	lock mpsVelTrg to (mSrf + mOvrSht) / (eta:apoapsis + timeFall).
 
 	until SHIP:groundspeed > (mpsVelTrg * 0.99) {
-		write_screen("Target Pad", true).
+		write_screen_ble("Target Pad", true).
 		// set navMode to "Surface".
 	}
 
@@ -456,7 +454,7 @@ if SHIP:status = "PRELAUNCH" {
 	local timeStab is time:seconds + 20.
 
 	until time:seconds > timeStab {
-		write_screen("Stabilise", true).
+		write_screen_ble("Stabilise", true).
 	}
 
 	// Stage: BEGIN RE-ORIENT
@@ -464,7 +462,7 @@ if SHIP:status = "PRELAUNCH" {
 	local timeRO is time:seconds + 7.
 
 	until time:seconds > timeRO {
-		write_screen("Begin re-orient", true).
+		write_screen_ble("Begin re-orient", true).
 	}
 
 	// Stage: RE-ORIENT
@@ -472,7 +470,7 @@ if SHIP:status = "PRELAUNCH" {
 	rcs off.
 
 	until 180 - abs(degAOAPro) < 20 {
-		write_screen("Re-orient", true).
+		write_screen_ble("Re-orient", true).
 	}
 
 }
@@ -482,7 +480,7 @@ rcs on.
 lock steering to lookdirup(srfRetrograde:vector, heading(degPadEnt, 0):vector).
 
 until SHIP:altitude < mAeroGuid {
-	write_screen("Retro attitude", true).
+	write_screen_ble("Retro attitude", true).
 }
 
 // Re-entry section is effective to begin with but it all goes wrong at about 20km alt
@@ -502,7 +500,7 @@ lock rotProDes to angleAxis(rotMag, axsProDes).
 lock steering to lookdirup(rotProDes * -vecDesire, heading(degPadEnt, 0):vector). // Product of rotProDes and '-' of the desired vector
 
 until SHIP:altitude < mLdgBrn {
-	write_screen("Re-entry", true).
+	write_screen_ble("Re-entry", true).
 }
 
 // Stage: LANDING BURN (AERO)
@@ -522,14 +520,14 @@ lock steering to lookdirup(rotProDes * srfRetrograde:vector, heading(degPadEnt, 
 lock mpsVrtTrg to 0 - (sqrt((SHIP:altitude - mAltTrg) / 1000) * 130).
 
 until SHIP:q < dynAerThr {
-	write_screen("Landing burn (aero)", true).
+	write_screen_ble("Landing burn (aero)", true).
 }
 
 // Stage: LANDING BURN (THRUST)
 lock rotProDes to angleAxis(max(0 - degMaxThD, degProPad * (0 - mltDlfThr)), axsProPad).
 
 until SHIP:verticalspeed > mpsVrtTrg {
-	write_screen("Landing burn (thrust)", true).
+	write_screen_ble("Landing burn (thrust)", true).
 }
 
 // Stage: BALANCE THROTTLE
@@ -550,7 +548,7 @@ lock rotProOSP to angleAxis(max(degMaxTBD, degProOSP * ( mltDflBal)), axsProOSP)
 lock steering to lookdirup(rotProOSP * srfRetrograde:vector, heading(degPadEnt, 0):vector). // Target offset pad
 
 until SHIP:altitude < mAltAP1 {
-	write_screen("Balance throttle", true).
+	write_screen_ble("Balance throttle", true).
 }
 
 // Stage: TOWER APPROACH
@@ -565,7 +563,7 @@ unlock axsProOSP.
 unlock degProOSP.
 
 until mSrf < 5 and SHIP:groundspeed < 3 and SHIP:altitude < mAltWP2 {
-	write_screen("Tower Approach", true).
+	write_screen_ble("Tower Approach", true).
 	set_rcs_translate(vecThr:mag, degThrHed).
 }
 
@@ -574,7 +572,7 @@ lock steering to lookDirUp(up:vector, heading(degPadEnt, 0):vector).
 set mAltTrg to mAltAP3.
 
 until SHIP:altitude < mAltWP4 {
-	write_screen("Descent", true).
+	write_screen_ble("Descent", true).
 	set_rcs_translate(vecThr:mag, degThrHed).
 }
 
@@ -594,7 +592,7 @@ for mdGridFin in arrGridFins {
 local sStabilise is 10.
 local timeStable is time:seconds + sStabilise.
 until time:seconds > timeStable {
-	write_screen("Tower catch", true).
+	write_screen_ble("Tower catch", true).
 }
 
 unlock steering.

@@ -4,7 +4,7 @@
 //---------------------------------------------------------------------------------------------------------------------
 
 // Logfile
-global log is "Telemetry/ss_edl_earth_log.csv".
+global log_see is "Telemetry/ss_edl_earth_log.csv".
 
 // Define Boca Chica catch tower - long term get this from target info
 global pad is latlng(25.9669968, -97.1416771). // Tower Catch point - BC OLIT 1
@@ -201,7 +201,7 @@ if defined rsCMCH4 {
 // #region FUNCTIONS
 //---------------------------------------------------------------------------------------------------------------------
 
-function write_console { // Write unchanging display elements and header line of new CSV file
+function write_console_see { // Write unchanging display elements and header line of new CSV file
 	clearScreen.
 	print "Phase:        " at (0, 0).
 	print "----------------------------" at (0, 1).
@@ -226,7 +226,7 @@ function write_console { // Write unchanging display elements and header line of
 	print "Throttle:                  %" at (0, 20).
 	print "Target VSpd:             mps" at (0, 21).
 
-	deletePath(log).
+	deletePath(log_see).
 	local logline is "Time,".
 	set logline to logline + "Phase,".
 	set logline to logline + "Altitude,".
@@ -245,10 +245,10 @@ function write_console { // Write unchanging display elements and header line of
 	set logline to logline + "Propellant,".
 	set logline to logline + "Throttle,".
 	set logline to logline + "Target VSpd,".
-	log logline to log.
+	log logline to log_see.
 }
 
-function write_screen { // Write dynamic display elements and write telemetry to logfile
+function write_screen_see { // Write dynamic display elements and write telemetry to logfile
 	parameter phase.
 	parameter writelog.
 	print phase + "        " at (14, 0).
@@ -293,7 +293,7 @@ function write_screen { // Write dynamic display elements and write telemetry to
 		set logline to logline + round(klProp, 0) + ",".
 		set logline to logline + round(throttle * 100, 2) + ",".
 		set logline to logline + round(mpsVrtTrg, 0) + ",".
-		log logline to log.
+		log logline to log_see.
 	}
 }
 
@@ -446,7 +446,7 @@ for mdSSFlap in arrSSFlaps {
 	mdSSFlap:setfield("deploy", true).
 }
 
-write_console().
+write_console_see().
 
 //---------------------------------------------------------------------------------------------------------------------
 // #endregion
@@ -456,7 +456,7 @@ write_console().
 
 // Stage: BALANCE FUEL
 until ((abs((rsHDLOX:amount / rsBDLOX:amount) - ratFlHDBD) < 0.01) and (abs((rsHDCH4:amount / rsBDCH4:amount) - ratFlHDBD) < 0.01)) {
-	write_screen("Balance fuel", false).
+	write_screen_see("Balance fuel", false).
 	if (rsHDLOX:amount / rsBDLOX:amount) > ratFlHDBD {
 		set trnLOXH2B to transfer("lqdOxygen", ptSSHeader, ptSSBody, rsHDLOX:amount / 20).
 		if (trnLOXH2B:active = false) { set trnLOXH2B:active to true. }
@@ -478,7 +478,7 @@ rcs on.
 lock steering to lookdirup(heading(pad:heading, max(min(degPitTrg, degPitMax), degPitMin)):vector, SHIP:srfRetrograde:vector).
 
 until kpaDynPrs > kpaMeso {
-	write_screen("Thermosphere (RCS)", false).
+	write_screen_see("Thermosphere (RCS)", false).
 	set degPitTrg to calculate_lrp().
 }
 
@@ -490,7 +490,7 @@ set pidYaw to pidLoop(arrYawMeso[0], arrYawMeso[1], arrYawMeso[2]).
 set pidRol to pidLoop(arrRolMeso[0], arrRolMeso[1], arrRolMeso[2]).
 
 until SHIP:altitude < mAltStrt {
-	write_screen("Mesosphere (Flaps)", true).
+	write_screen_see("Mesosphere (Flaps)", true).
 	set degPitTrg to calculate_lrp().
 	set degYawTrg to kpaDynPrs * (0 - degBerPad).
 	calculate_csf().
@@ -503,7 +503,7 @@ set pidYaw to pidLoop(arrYawStrt[0], arrYawStrt[1], arrYawStrt[2]).
 set pidRol to pidLoop(arrRolStrt[0], arrRolStrt[1], arrRolStrt[2]).
 
 until SHIP:groundspeed < mpsTrop {
-	write_screen("Stratosphere (Flaps)", true).
+	write_screen_see("Stratosphere (Flaps)", true).
 	set degPitTrg to calculate_lrp().
 	set degYawTrg to kpaDynPrs * (0 - degBerPad).
 	calculate_csf().
@@ -516,7 +516,7 @@ set pidYaw to pidLoop(arrYawTrop[0], arrYawTrop[1], arrYawTrop[2], -10, 10).
 set pidRol to pidLoop(arrRolTrop[0], arrRolTrop[1], arrRolTrop[2], -10, 10).
 
 until calculate_srp() > calculate_lrp() {
-	write_screen("Troposphere (Flaps)", true).
+	write_screen_see("Troposphere (Flaps)", true).
 	set degPitTrg to calculate_lrp().
 	set degYawTrg to kpaDynPrs * (0 - degBerPad).
 	calculate_csf().
@@ -530,7 +530,7 @@ set pidYaw to pidLoop(arrYawFlre[0], arrYawFlre[1], arrYawFlre[2], -10, 10).
 set pidRol to pidLoop(arrRolFlre[0], arrRolFlre[1], arrRolFlre[2], -10, 10).
 
 until abs(SHIP:groundspeed / SHIP:verticalspeed) < 0.58 {
-	write_screen("Flare & Drop (Flaps)", true).
+	write_screen_see("Flare & Drop (Flaps)", true).
 	set degPitTrg to calculate_srp().
 	set degYawTrg to 0 - (degBerPad * 2).
 	calculate_csf().
@@ -543,7 +543,7 @@ set pidYaw to pidLoop(arrYawFlop[0], arrYawFlop[1], arrYawFlop[2], -2, 2).
 set pidRol to pidLoop(arrRolFlop[0], arrRolFlop[1], arrRolFlop[2], -10, 10).
 
 until SHIP:altitude < mAltFnB {
-	write_screen("Bellyflop (Flaps)", true).
+	write_screen_see("Bellyflop (Flaps)", true).
 	set degPitTrg to calculate_srp().
 	set degYawTrg to 0 - (degBerPad * 2).
 	calculate_csf().
@@ -562,7 +562,7 @@ set SHIP:control:yaw to 0.
 set SHIP:control:roll to 0.
 
 until ptRaptorSLA:thrust > kNThrMin {
-	write_screen("Flip & Burn", true).
+	write_screen_see("Flip & Burn", true).
 	set SHIP:control:pitch to pidRCS:update(time:seconds, degPitAct - degPitTrg).
 }
 
@@ -580,7 +580,7 @@ lock steering to lookdirup(rotProDes * srfRetrograde:vector, heading(degPadEnt, 
 lock mpsVrtTrg to (mAltTrg - SHIP:altitude) / 5.
 
 until SHIP:verticalspeed > mpsVrtTrg {
-	write_screen("Landing Burn", true).
+	write_screen_see("Landing Burn", true).
 }
 
 // Stage: BALANCE THROTTLE
@@ -588,7 +588,7 @@ lock mpsVrtTrg to (mAltTrg - SHIP:altitude) / 5.
 lock throttle to max(0.0001, pidThr:update(time:seconds, SHIP:verticalspeed - mpsVrtTrg)). // Attempt to hover at mAltTrg
 
 until SHIP:altitude < mAltWP1 {
-	write_screen("Balance Throttle", true).
+	write_screen_see("Balance Throttle", true).
 }
 
 // Stage: TOWER APPROACH
@@ -609,7 +609,7 @@ unlock axsProDes.
 unlock degVAng.
 
 until mSrf < 5 and SHIP:groundspeed < 3 and SHIP:altitude < mAltWP2 {
-	write_screen("Tower Approach", true).
+	write_screen_see("Tower Approach", true).
 	set_rcs_translate(vecThr:mag, degThrHed).
 }
 
@@ -618,7 +618,7 @@ lock steering to lookDirUp(up:vector, heading(degPadEnt, 0):vector).
 set mAltTrg to mAltAP3.
 
 until SHIP:altitude < mAltWP4 {
-	write_screen("Descent", true).
+	write_screen_see("Descent", true).
 	set_rcs_translate(vecThr:mag, degThrHed).
 }
 
@@ -631,7 +631,7 @@ rcs off.
 ptRaptorSLA:shutdown.
 ptRaptorSLB:shutdown.
 ptRaptorSLC:shutdown.
-write_screen("Tower Catch", true).
+write_screen_see("Tower Catch", true).
 
 //---------------------------------------------------------------------------------------------------------------------
 // #endregion

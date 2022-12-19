@@ -1,4 +1,6 @@
 
+parameter useCam.
+
 //---------------------------------------------------------------------------------------------------------------------
 // #region GLOBALS
 //---------------------------------------------------------------------------------------------------------------------
@@ -364,6 +366,20 @@ for mdSSFlap in arrSSFlaps_sle {
 	mdSSFlap:setfield("deploy", true).
 }
 
+if useCam {
+	// Camera settings
+	global cam is addons:camera:flightcamera.
+	set cam:target to ptSSBody.
+	wait 1.
+	set cam:mode to "locked".
+	wait 1.
+	set cam:pitch to 0.
+	wait 1.
+	set cam:heading to -90.
+	wait 1.
+	set cam:distance to 80.
+}
+
 write_console_sle().
 
 //---------------------------------------------------------------------------------------------------------------------
@@ -438,25 +454,31 @@ if SHIP:status = "PRELAUNCH" {
 }
 
 // Stage: COAST TO APOGEE
+set ag7 to true.
+set ag9 to true.
 for ptRaptorSL in arrRaptorSL_sle { ptRaptorSL:shutdown. }
 for ptRaptorVac in arrRaptorVac_sle { ptRaptorVac:shutdown. }
 for mdSP in arrSPModules_sle { mdSP:doaction("extend solar panel", true). }
 set SHIP:control:fore to 0.
-rcs off.
+
+lock steering to lookDirUp(prograde:vector, up:vector).
+local timOrient is time:seconds + 30.
+until time:seconds > timOrient {
+	write_screen_sle("Orient for coast", true).
+}
 unlock steering.
+rcs off.
 sas on.
-set sasmode to "prograde".
+wait 0.2.
+set sasMode to "Prograde".
 
 until SHIP:orbit:eta:apoapsis < 4 {
 	write_screen_sle("Coast to Apogee", true).
-	set sasmode to "prograde".
 }
 
 // Stage: CIRCULARISING
 for ptRaptorSL in arrRaptorSL_sle { ptRaptorSL:activate. }
 for ptRaptorVac in arrRaptorVac_sle { ptRaptorVac:activate. }
-sas off.
-lock steering to prograde.
 lock throttle to 1.
 rcs on.
 
@@ -468,16 +490,13 @@ until (SHIP:orbit:apoapsis + SHIP:orbit:periapsis) > (mAPTrg * 1.99) {
 for ptRaptorSL in arrRaptorSL_sle { ptRaptorSL:shutdown. }
 for ptRaptorVac in arrRaptorVac_sle { ptRaptorVac:shutdown. }
 lock throttle to 0.
-unlock steering.
 rcs off.
-sas on.
-set sasmode to "prograde".
-local timeWait is time:seconds + 4.
 
+local timeWait is time:seconds + 1.
 until time:seconds > timeWait {
 	write_screen_sle("Orbit attained", true).
-	set sasmode to "prograde".
 }
+sas off.
 
 if target_is_vessel(target:name) {
 	runPath("SS_RVD_LEO.ks", target:name).

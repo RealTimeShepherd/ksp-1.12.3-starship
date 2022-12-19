@@ -13,7 +13,8 @@ for targ in targs {
 // Logfile
 global log_srl is "Telemetry/ss_rvd_leo.csv".
 
-global mDistRndv is 5000. // Distance for rendezvous
+global mDistRapt is 15000. // Distance for using Raptors to intercept
+global mDistRndv is 4000. // Distance for rendezvous
 global mDistDock is 300. // Distance for docking
 
 global vecHldNos is 0. // Vector to hold attitude when docking
@@ -127,7 +128,7 @@ function write_console_srl { // Write unchanging display elements and header lin
 	print "----------------------------" at (0, 1).
 	print "Relative vel:            mps" at (0, 2).
 	print "Relative ang:            deg" at (0, 3).
-	print "Target dist:               s" at (0, 4).
+	print "Target dist:               m" at (0, 4).
 	print "----------------------------" at (0, 5).
 	print "Dock Port X:               m" at (0, 6).
 	print "Dock Port Y:               m" at (0, 7).
@@ -216,6 +217,7 @@ for mdSSFlap in arrSSFlaps_srl {
 }
 
 write_console_srl().
+set navMode to "orbit".
 
 //---------------------------------------------------------------------------------------------------------------------
 // #endregion
@@ -225,32 +227,48 @@ write_console_srl().
 
 // Activate vacuum Raptors
 for ptRaptorVac in arrRaptorVac_srl { ptRaptorVac:activate. }
+lock steering to lookDirUp(prograde:vector, up:vector).
 
 if dockTrg:distance > mDistRndv {
 
-	// Stage: Wait for node
-	lock degIncDlt to SHIP:orbit:lan - dockTrg:orbit:lan.
-	set degOldID to degIncDlt.
-	wait 1.
-	if degIncDlt > degOldID {
-		// Inclination delta is increasing
-		until degIncDlt < degOldID {
-			write_screen_srl("Waiting for node", true).
-			set degOldID to degIncDlt.
-			wait 1.
-		}
+	// Stage: Wait for crossover
+	lock vecOrbTrg to vxcl(up:vector, dockTrg:position).
+	if vang(dockTrg:position, SHIP:prograde:vector) < vang(dockTrg:position, SHIP:retrograde:vector) {
+		// Target is ahead
+		lock steering to lookDirUp(retrograde:vector, up:vector).
+		lock vecOrbVel to vxcl(up:vector, SHIP:prograde:vector).
 	} else {
-		// Inclination delta is decreasing
-		until degIncDlt > degOldID {
-			write_screen_srl("Waiting for node", true).
-			set degOldID to degIncDlt.
-			wait 1.
-		}
+		// Target is behind
+		lock steering to lookDirUp(prograde:vector, up:vector).
+		lock vecOrbVel to vxcl(up:vector, SHIP:retrograde:vector).
 	}
+	
+	rcs on.
+	local timOrient is time:seconds + 30.
+	until time:seconds > timOrient or vAng(vecOrbTrg, vecOrbVel) < 0.5 or dockTrg:distance < mDistRndv {
+		write_screen_srl("Orient for coast", true).
+	}
+	unlock steering.
+	rcs off.
+	sas on.
+	wait 0.2.
+	if vang(dockTrg:position, SHIP:prograde:vector) < vang(dockTrg:position, SHIP:retrograde:vector) {
+		set sasMode to "Retrograde".
+	} else {
+		set sasMode to "Prograde".
+	}
+
+	until vAng(vecOrbTrg, vecOrbVel) < 0.5 or dockTrg:distance < mDistRndv {
+		write_screen_srl("X-over: " + round(vAng(vecOrbTrg, vecOrbVel), 2), true).
+	}
+	sas off.
+
+}
+
+until dockTrg:distance < mDistRndv {
 
 	// Stage: INTERCEPT
 	rcs on.
-	set navMode to "orbit".
 	local sTrgDlt is dockTrg:distance / dockTrg:velocity:orbit:mag.
 
 	if vang(dockTrg:position, SHIP:prograde:vector) < vang(dockTrg:position, SHIP:retrograde:vector) {
@@ -260,10 +278,18 @@ if dockTrg:distance > mDistRndv {
 		until vAng(SHIP:facing:vector, retrograde:vector) < 0.5 {
 			write_screen_srl("Facing retrograde", true).
 		}
-		lock throttle to 0.4.
-		until sOPSelf < (sOPTarg - sTrgDlt) * 1.0001 {
-			write_screen_srl("Intercept (burn)", true).
+		if dockTrg:distance > mDistRapt {
+			lock throttle to 0.4.
+			until sOPSelf < (sOPTarg - sTrgDlt) * 1.01 {
+				write_screen_srl("Intercept (burn)", true).
+			}
+			lock throttle to 0.
 		}
+		set SHIP:control:fore to 1.
+		until sOPSelf < (sOPTarg - sTrgDlt) * 1.000001 {
+			write_screen_srl("Intercept (trim)", true).
+		}
+		set SHIP:control:fore to 0.
 	} else {
 		// Target is behind
 		lock steering to lookDirUp(prograde:vector, up:vector).
@@ -271,29 +297,43 @@ if dockTrg:distance > mDistRndv {
 		until vAng(SHIP:facing:vector, prograde:vector) < 0.5 {
 			write_screen_srl("Facing prograde", true).
 		}
-		lock throttle to 0.4.
-		until sOPSelf > (sOPTarg + sTrgDlt) * 0.9999 {
-			write_screen_srl("Intercept (burn)", true).
+		if dockTrg:distance > mDistRapt {
+			lock throttle to 0.4.
+			until sOPSelf > (sOPTarg + sTrgDlt) * 0.99 {
+				write_screen_srl("Intercept (burn)", true).
+			}
+			lock throttle to 0.
 		}
+		set SHIP:control:fore to 1.
+		until sOPSelf > (sOPTarg + sTrgDlt) * 0.999999 {
+			write_screen_srl("Intercept (trim)", true).
+		}
+		set SHIP:control:fore to 0.
 	}
 
-	lock throttle to 0.
-	rcs off.
+	lock steering to lookDirUp(prograde:vector, up:vector).
+	local timOrient is time:seconds + 30.
+	until time:seconds > timOrient or dockTrg:distance < mDistRndv {
+		write_screen_srl("Orient for coast", true).
+	}
 	unlock steering.
+	rcs off.
 	sas on.
-	wait 0.1.
-	set sasmode to "prograde".
+	wait 0.2.
+	set sasMode to "Prograde".
 
 	local timIntcpt is time:seconds + sOPSelf.
-	until time:seconds > timIntcpt and dockTrg:distance > mDistRndv {
+	until time:seconds > timIntcpt or dockTrg:distance < mDistRndv {
 		write_screen_srl("Intercept (" + round(time:seconds - timIntcpt, 0) + ")", true).
 	}
+	sas off.
 
 }
 
 // Stage: CLOSING
 rcs on.
 set SHIP:control:fore to 0.
+set navMode to "target".
 
 until dockTrg:distance < mDistDock {
 
@@ -319,7 +359,7 @@ until dockTrg:distance < mDistDock {
 	}
 
 	rcs off.
-	until degRelTrg > 90 or dockTrg:distance < mDistDock {
+	until degRelTrg > 75 or dockTrg:distance < mDistDock {
 		write_screen_srl("Closing (coast)", true).
 	}
 	rcs on.
@@ -327,6 +367,7 @@ until dockTrg:distance < mDistDock {
 }
 
 // Stage: ALIGN BODY
+set ag8 to true.
 for ptRaptorVac in arrRaptorVac_srl { ptRaptorVac:shutdown. }
 
 set SHIP:control:fore to 0.
@@ -394,6 +435,7 @@ until SHIP:mass > tCurMass {
 // Stage: Fuel transfer
 unlock steering.
 rcs off.
+set ag8 to false.
 until false {
 	write_screen_srl("Fuel transfer", true).
 }

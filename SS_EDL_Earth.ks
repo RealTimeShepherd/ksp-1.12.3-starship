@@ -458,17 +458,17 @@ write_console_see().
 until ((abs((rsHDLOX:amount / rsBDLOX:amount) - ratFlHDBD) < 0.01) and (abs((rsHDCH4:amount / rsBDCH4:amount) - ratFlHDBD) < 0.01)) {
 	write_screen_see("Balance fuel", false).
 	if (rsHDLOX:amount / rsBDLOX:amount) > ratFlHDBD {
-		set trnLOXH2B to transfer("lqdOxygen", ptSSHeader, ptSSBody, rsHDLOX:amount / 20).
+		set trnLOXH2B to transfer("lqdOxygen", ptSSHeader, ptSSBody, rsHDLOX:amount / 200).
 		if (trnLOXH2B:active = false) { set trnLOXH2B:active to true. }
 	} else {
-		set trnLOXB2H to transfer("lqdOxygen", ptSSBody, ptSSHeader, rsHDLOX:amount / 20).
+		set trnLOXB2H to transfer("lqdOxygen", ptSSBody, ptSSHeader, rsHDLOX:amount / 200).
 		if (trnLOXB2H:active = false) { set trnLOXB2H:active to true. }
 	}
 	if (rsHDCH4:amount / rsBDCH4:amount) > ratFlHDBD {
-		set trnCH4H2B to transfer("LqdMethane", ptSSHeader, ptSSBody, rsHDCH4:amount / 20).
+		set trnCH4H2B to transfer("LqdMethane", ptSSHeader, ptSSBody, rsHDCH4:amount / 200).
 		if (trnCH4H2B:active = false) { set trnCH4H2B:active to true. }
 	} else {
-		set trnCH4B2H to transfer("LqdMethane", ptSSBody, ptSSHeader, rsHDCH4:amount / 20).
+		set trnCH4B2H to transfer("LqdMethane", ptSSBody, ptSSHeader, rsHDCH4:amount / 200).
 		if (trnCH4B2H:active = false) { set trnCH4B2H:active to true. }
 	}
 }

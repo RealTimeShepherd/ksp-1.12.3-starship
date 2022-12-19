@@ -35,3 +35,11 @@ wait 0.001.
 set kuniverse:defaultloaddistance:prelaunch:pack TO mDstBse - 1.
 set kuniverse:defaultloaddistance:prelaunch:unpack TO mDstBse - 1000.
 wait 0.001.
+
+// In orbit
+set kuniverse:defaultloaddistance:orbit:unload TO mDstBse.
+set kuniverse:defaultloaddistance:orbit:load TO mDstBse - 500.
+wait 0.001.
+set kuniverse:defaultloaddistance:orbit:pack TO mDstBse - 1.
+set kuniverse:defaultloaddistance:orbit:unpack TO mDstBse - 1000.
+wait 0.001.

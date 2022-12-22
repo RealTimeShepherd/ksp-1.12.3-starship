@@ -1,4 +1,24 @@
 
+//---------------------------------------------------------------------------------------------------------------------
+// #region HEADER
+//---------------------------------------------------------------------------------------------------------------------
+
+// Title:       SS_LTO_Earth
+// Translation: StarShip - Launch to orbit - Earth
+// Description: This script deals with taking the StarShip to low Earth orbit (LEO) through the following stages
+// On booster:  Wait for the SuperHeavy booster to lift the StarShip up to about 50Km altitude and 2km/s speed
+// Ascent:      Full throttle with all 6 engines, controlling the pitch to guide the vehicle into an eccentric orbit
+// Coast to AP: Wait half an orbit to climb to the maximum altitude
+// Circularise: Circularise the orbit at AP
+// Rendezvous:  If the SH_LBBC_Earth script controlling the SuperHeavy Booster targeted a vehicle at launch, this script
+//                  will launch a follow on script SS_RVD_LEO to conduct rendezvous and docking manoeuvres
+
+// Parameters:  useCam - if specified, the camera commands will be run (For recording videos)
+
+//---------------------------------------------------------------------------------------------------------------------
+// #region PARAMETERS
+//---------------------------------------------------------------------------------------------------------------------
+
 parameter useCam.
 
 //---------------------------------------------------------------------------------------------------------------------
@@ -371,13 +391,13 @@ if useCam {
 	global cam is addons:camera:flightcamera.
 	set cam:target to ptSSBody.
 	wait 1.
-	set cam:mode to "locked".
+	set cam:mode to "free".
 	wait 1.
-	set cam:pitch to 0.
+	set cam:heading to 0.
 	wait 1.
-	set cam:heading to -90.
+	set cam:pitch to 90.
 	wait 1.
-	set cam:distance to 80.
+	set cam:distance to 100.
 }
 
 write_console_sle().

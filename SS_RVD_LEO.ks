@@ -1,4 +1,23 @@
 
+//---------------------------------------------------------------------------------------------------------------------
+// #region HEADER
+//---------------------------------------------------------------------------------------------------------------------
+
+// Title:       SS_RVD_LEO
+// Translation: StarShip - Rendezvous and docking - Low Earth orbit
+// Description: This script takes the StarShip in low Earth orbit (LEO) through the following stages
+// Await xover: Wait for the StarShip to cross the orbit of the target vehicle
+// Intercept:   Perform an intercept burn at cross over for an intercept one orbit later
+// Coast - Int: Wait a full orbit for close intercept of target
+// Match/Close: Match target velocity at close distance and then close the distance
+// Final app:   Final approach and docking - the target is expected to match attitude
+
+// Parameters:  dockTarget - Name of target vessel. Mandatory, this script is all about docking with a target
+
+//---------------------------------------------------------------------------------------------------------------------
+// #region PARAMETERS
+//---------------------------------------------------------------------------------------------------------------------
+
 parameter dockTarget.
 list targets in targs.
 for targ in targs {

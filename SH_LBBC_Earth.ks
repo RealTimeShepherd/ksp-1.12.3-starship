@@ -1,4 +1,21 @@
 
+//---------------------------------------------------------------------------------------------------------------------
+// #region HEADER
+//---------------------------------------------------------------------------------------------------------------------
+
+// Title:       SH_LBBC_Earth
+// Translation: SuperHeavy - Launch, Boostback and Catch - Earth
+// Description: This script deals with controlling the SuperHeavy Booster through the following stages
+// Launch:      Lift the StarShip up to about 50Km altitude and 2km/s speed using 82% of the available fuel
+// Boostback:   Release the StarShip and reverse direction to target the launchsite using another 10% of the fuel
+// Catch:       Perform a single landing burn guiding the vehicle to a tower catch using the remaining 8% of fuel
+
+// Parameters:  launchTrg - if specified, the SuperHeavy will wait until the correct moment to launch to the target
+
+//---------------------------------------------------------------------------------------------------------------------
+// #region PARAMETERS
+//---------------------------------------------------------------------------------------------------------------------
+
 parameter launchTrg.
 
 //---------------------------------------------------------------------------------------------------------------------

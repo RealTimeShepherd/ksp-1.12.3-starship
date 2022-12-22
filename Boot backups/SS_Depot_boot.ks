@@ -55,6 +55,7 @@ if SHIP:status = "PRELAUNCH" {
 		write_screen_sdb("Waiting").
 	}
 
+	set ag8 to true.
 	rcs on.
 	lock steering to lookDirUp(docker:facing:vector, docker:position).
 

@@ -1,5 +1,20 @@
 
 //---------------------------------------------------------------------------------------------------------------------
+// #region HEADER
+//---------------------------------------------------------------------------------------------------------------------
+
+// Title:       SS_EDL_Earth
+// Translation: StarShip - Entry Descent and Landing - Earth
+// Description: This script takes the StarShip from a decaying Earth orbit through the following stages
+// Descend:     Wait for the StarShip to touch the top of the atmosphere
+// Balance:     Move fuel about within the vehicle to achieve a balanced craft for easier flap control
+// High atmos:  Maintain attitude with RCS while atmosphere is too thin to use flaps
+// Navigate:    Control the vehicle entirely with the flaps, calculating pitch and yaw to navigate back to base
+// Bellyflop:   Close to the tower, use the flaps to guide the falling ship towards the tower
+// Flip & burn: In the last couple of km, flip to vertical and use the sea level raptors to guide the ship to the tower
+// Catch:       The tower catches the StarShip in Mechazilla for a safe return home
+
+//---------------------------------------------------------------------------------------------------------------------
 // #region GLOBALS
 //---------------------------------------------------------------------------------------------------------------------
 
@@ -39,6 +54,7 @@ global degPitTrg is 0.
 global degYawTrg is 0.
 
 // stage thresholds
+global mAltStart is 100000.
 global kpaMeso is 0.5.
 global mAltStrt is 50000.
 global mpsTrop is 1600.
@@ -148,6 +164,7 @@ if defined ptSSCommand {
 // Bind to modules & resources within StarShip Body
 if defined ptSSBody {
 	set mdSSBDRCS to ptSSBody:getmodule("ModuleRCSFX").
+	set mdSSBDDock to ptSSBody:getmodule("ModuleDockingNode").
 	// Bind to command tanks
 	for rsc in ptSSBody:resources {
 		if rsc:name = "LqdOxygen" { set rsBDLOX to rsc. }
@@ -434,14 +451,14 @@ ptRaptorSLC:shutdown.
 // Shut down vacuum Raptors
 for ptRaptorVac in arrRaptorVac { ptRaptorVac:shutdown. }
 
-// Set flaps to entry position
+// Set flaps to default position
 for mdSSFlap in arrSSFlaps {
 	// Disable manual control
 	mdSSFlap:setfield("pitch", true).
 	mdSSFlap:setfield("yaw", true).
 	mdSSFlap:setfield("roll", true).
 	// Set starting angles
-	mdSSFlap:setfield("deploy angle", degFlpTrm).
+	mdSSFlap:setfield("deploy angle", 0).
 	// deploy control surfaces
 	mdSSFlap:setfield("deploy", true).
 }
@@ -453,6 +470,11 @@ write_console_see().
 //---------------------------------------------------------------------------------------------------------------------
 // #region FLIGHT
 //---------------------------------------------------------------------------------------------------------------------
+
+// Stage: DESCEND
+until SHIP:altitude < mAltStart {
+	write_screen_see("Descend", false).
+}
 
 // Stage: BALANCE FUEL
 until ((abs((rsHDLOX:amount / rsBDLOX:amount) - ratFlHDBD) < 0.01) and (abs((rsHDCH4:amount / rsBDCH4:amount) - ratFlHDBD) < 0.01)) {
@@ -474,6 +496,16 @@ until ((abs((rsHDLOX:amount / rsBDLOX:amount) - ratFlHDBD) < 0.01) and (abs((rsH
 }
 
 // Stage: THERMOSPHERE
+for mdSSFlap in arrSSFlaps {
+	// Disable manual control
+	mdSSFlap:setfield("pitch", true).
+	mdSSFlap:setfield("yaw", true).
+	mdSSFlap:setfield("roll", true).
+	// Set starting angles
+	mdSSFlap:setfield("deploy angle", degFlpTrm).
+	// deploy control surfaces
+	mdSSFlap:setfield("deploy", true).
+}
 rcs on.
 lock steering to lookdirup(heading(pad:heading, max(min(degPitTrg, degPitMax), degPitMin)):vector, SHIP:srfRetrograde:vector).
 

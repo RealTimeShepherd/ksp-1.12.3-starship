@@ -1,4 +1,4 @@
-﻿^f::
+﻿^j::
 Send, function heading_of_vector {{}{Enter}
 Send, parameter vecT.{Enter}
 Send, local east IS VCRS(SHIP:UP:VECTOR, SHIP:NORTH:VECTOR).{Enter}

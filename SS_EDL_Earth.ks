@@ -24,19 +24,19 @@ global log_see is "Telemetry/ss_edl_earth_log.csv".
 
 // Define Boca Chica catch tower - long term get this from target info
 // Target info: Geoposition = 25.9669602, -97.1418428 | heading_of_vector(SHIP:facing:vector). = 355.3
+// Probably add 90 deg to the heading and add a short vector along that axis for the catch point
+// Then remove 90 deg from the heading to get the entry direction
 
 global pad is latlng(25.9669968, -97.1416771). // Tower Catch point - BC OLIT 1
 global degPadEnt is 262.
 global mAltWP1 is 400. // Waypoints - ship will travel through these altitudes - originally 600
 global mAltWP2 is 250. // Originally 300
-//global mAltWP4 is 200.5. // Tower Catch altitude - BC OLIT 1
-global mAltRad is 51. // Caught when SHIP:bounds:bottomaltradar is less than this value
+global mAltRad is 42. // Caught when SHIP:bounds:bottomaltradar is less than this value
 global mAltAP1 is 300. // Aim points - ship will aim at these altitudes
 global mAltAP2 is 230.
 global mAltAP3 is 200.
 
-// Ratio of fuel between header and body for balanced EDL
-//global ratFlHDBD is 0.1.
+// Positioning fuel between header and body for balanced EDL
 global mRapA2COM is 23.9. // The distance from the vessel centre of mass to the Raptor 'A' engine for a balanced craft
 
 // Long range pitch tracking
@@ -116,7 +116,6 @@ global arrSSFlaps is list().
 global arrRaptorVac is list().
 
 // Propulsive landing
-// global mAltFnB is 2400.
 global kNThrMin is 1500.
 global degDflMax is 2. // 5 original
 global mAltTrg is 0.
@@ -710,6 +709,7 @@ local B is SHIP:bounds. // get the :bounds suffix ONCE.
 until B:bottomaltradar < mAltRad {
 	write_screen_see("Descent", true).
 	set_rcs_translate(vecThr:mag, degThrHed).
+	print round(B:bottomaltradar, 2) + " m" at (0, 22).
 }
 
 // Stage: TOWER CATCH

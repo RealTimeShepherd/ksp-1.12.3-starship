@@ -8,7 +8,7 @@ global catch is 0.
 lock mDist to 0.
 
 function write_console {
-	
+
 	clearScreen.
 	print "Phase:        " at (0, 0).
 	print "----------------------------" at (0, 1).
@@ -17,7 +17,7 @@ function write_console {
 	print "----------------------------" at (0, 4).
 	print "Geo Lat delta:" at(0, 5).
 	print "Geo Lng delta:" at(0, 6).
-	
+
 }
 
 function write_screen {
@@ -70,7 +70,7 @@ if SHIP:Name <> "Tanker StarShip" and SHIP:Name <> "Crew StarShip" {
 	lock mDist to (vecCatch - vxcl(up:vector, SHIP:geoposition:position)):mag.
 	
 	write_console().
-	until mDist < 20 and catch:altitude < 280 { write_screen("Waiting to catch " + catch:Name). }
+	until mDist < 20 and catch:altitude < 250 { write_screen("Waiting to catch " + catch:Name). }
 
 	mdArmMove:doevent("close arms").
 	local secTCatch is 4.

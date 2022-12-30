@@ -1,4 +1,3 @@
-
 //---------------------------------------------------------------------------------------------------------------------
 // #region HEADER
 //---------------------------------------------------------------------------------------------------------------------
@@ -15,6 +14,8 @@
 // Catch:       The tower catches the StarShip in Mechazilla for a safe return home
 
 //---------------------------------------------------------------------------------------------------------------------
+// #endregion
+//---------------------------------------------------------------------------------------------------------------------
 // #region GLOBALS
 //---------------------------------------------------------------------------------------------------------------------
 
@@ -22,26 +23,34 @@
 global log_see is "Telemetry/ss_edl_earth_log.csv".
 
 // Define Boca Chica catch tower - long term get this from target info
+// Target info: Geoposition = 25.9669602, -97.1418428 | heading_of_vector(SHIP:facing:vector). = 355.3
+
 global pad is latlng(25.9669968, -97.1416771). // Tower Catch point - BC OLIT 1
 global degPadEnt is 262.
-global mAltWP1 is 600. // Waypoints - ship will travel through these altitudes
-global mAltWP2 is 300.
-global mAltWP4 is 200.5. // Tower Catch altitude - BC OLIT 1
+global mAltWP1 is 400. // Waypoints - ship will travel through these altitudes - originally 600
+global mAltWP2 is 250. // Originally 300
+//global mAltWP4 is 200.5. // Tower Catch altitude - BC OLIT 1
+global mAltRad is 51. // Caught when SHIP:bounds:bottomaltradar is less than this value
 global mAltAP1 is 300. // Aim points - ship will aim at these altitudes
 global mAltAP2 is 230.
 global mAltAP3 is 200.
 
 // Ratio of fuel between header and body for balanced EDL
-global ratFlHDBD is 0.1.
+//global ratFlHDBD is 0.1.
+global mRapA2COM is 23.9. // The distance from the vessel centre of mass to the Raptor 'A' engine for a balanced craft
 
 // Long range pitch tracking
-global cnsLrp is (SHIP:mass / 12) + 89.
+// Ship mass of 151 - Trying 88
+// Ship mass of 137 - 86 works fine (Header tank only)
+global cnsLrp is (SHIP:mass / 12) + 88. // 89 - original - 86 works better for low mass StarShip
 global mLrpTrg is 12200.
 global ratLrp is 0.011.
 global qrcLrp is 0.
 
 // Short range pitch tracking
-global cnsSrp is 0.017. // surface m gained per m lost in altitude for every degree of pitch forward
+// Ship mass of 151 - We think 0.017 - maybe paired with 88 for lrp
+// Ship mass of 137 - 0.016 works fine
+global cnsSrp is 0.017. // surface m gained per m lost in altitude for every degree of pitch forward, 17 - original
 global mSrpTrgDst is 200.
 global mSrpTrgAlt is 1200.
 
@@ -53,8 +62,10 @@ global degPitMin is 40.
 global degPitTrg is 0.
 global degYawTrg is 0.
 
-// stage thresholds
-global mAltStart is 100000.
+// Stage thresholds
+global mAltOuter is 140000.
+global mAltUpper is 100000.
+global mAltThermo is 85000.
 global kpaMeso is 0.5.
 global mAltStrt is 50000.
 global mpsTrop is 1600.
@@ -105,9 +116,9 @@ global arrSSFlaps is list().
 global arrRaptorVac is list().
 
 // Propulsive landing
-global mAltFnB is 2400.
+// global mAltFnB is 2400.
 global kNThrMin is 1500.
-global degDflMax is 5.
+global degDflMax is 2. // 5 original
 global mAltTrg is 0.
 global pidThr is pidLoop(0.3, 0.2, 0, 0.01, 1).
 set pidThr:setpoint to 0.
@@ -164,7 +175,6 @@ if defined ptSSCommand {
 // Bind to modules & resources within StarShip Body
 if defined ptSSBody {
 	set mdSSBDRCS to ptSSBody:getmodule("ModuleRCSFX").
-	set mdSSBDDock to ptSSBody:getmodule("ModuleDockingNode").
 	// Bind to command tanks
 	for rsc in ptSSBody:resources {
 		if rsc:name = "LqdOxygen" { set rsBDLOX to rsc. }
@@ -406,6 +416,27 @@ function set_flaps { // Sets the angle of the flaps combining the trim and the t
 	mdFlapARCS:setfield("deploy angle", max(degAR, 0)).
 }
 
+function fill_header {
+	set trnLOXCM to transfer("lqdOxygen", ptSSBody, ptSSHeader, rsBDLOX:amount).
+	set trnCH4CM to transfer("LqdMethane", ptSSBody, ptSSHeader, rsBDCH4:amount).
+	if (trnLOXCM:active = false) { set trnLOXCM:active to true. }
+	if (trnCH4CM:active = false) { set trnCH4CM:active to true. }
+}
+
+function empty_header {
+	set trnLOXCM to transfer("lqdOxygen", ptSSHeader, ptSSBody, rsHDLOX:amount).
+	set trnCH4CM to transfer("LqdMethane", ptSSHeader, ptSSBody, rsHDCH4:amount).
+	if (trnLOXCM:active = false) { set trnLOXCM:active to true. }
+	if (trnCH4CM:active = false) { set trnCH4CM:active to true. }
+}
+
+function empty_command {
+	set trnLOXCM to transfer("lqdOxygen", ptSSCommand, ptSSBody, rsHDLOX:amount).
+	set trnCH4CM to transfer("LqdMethane", ptSSCommand, ptSSBody, rsHDCH4:amount).
+	if (trnLOXCM:active = false) { set trnLOXCM:active to true. }
+	if (trnCH4CM:active = false) { set trnCH4CM:active to true. }
+}
+
 function set_rcs_translate { // Set RCS translation values to target tower
 	parameter mag.
 	parameter deg.
@@ -428,9 +459,11 @@ set SHIP:control:pitch to 0.
 set SHIP:control:yaw to 0.
 set SHIP:control:roll to 0.
 
-// Switch off RCS and SAS
+// Switch off RCS
 rcs off.
-sas off.
+
+// Switch on SAS
+sas on.
 
 // Enable all fuel tanks
 if defined rsHDLOX { set rsHDLOX:enabled to true. }
@@ -472,30 +505,44 @@ write_console_see().
 //---------------------------------------------------------------------------------------------------------------------
 
 // Stage: DESCEND
-until SHIP:altitude < mAltStart {
+until SHIP:altitude < mAltOuter {
 	write_screen_see("Descend", false).
 }
 
-// Stage: BALANCE FUEL
-until ((abs((rsHDLOX:amount / rsBDLOX:amount) - ratFlHDBD) < 0.01) and (abs((rsHDCH4:amount / rsBDCH4:amount) - ratFlHDBD) < 0.01)) {
-	write_screen_see("Balance fuel", false).
-	if (rsHDLOX:amount / rsBDLOX:amount) > ratFlHDBD {
-		set trnLOXH2B to transfer("lqdOxygen", ptSSHeader, ptSSBody, rsHDLOX:amount / 200).
-		if (trnLOXH2B:active = false) { set trnLOXH2B:active to true. }
-	} else {
-		set trnLOXB2H to transfer("lqdOxygen", ptSSBody, ptSSHeader, rsHDLOX:amount / 200).
-		if (trnLOXB2H:active = false) { set trnLOXB2H:active to true. }
+if SHIP:altitude > mAltUpper {
+	// Stage: BALANCE FUEL
+	empty_header().
+	empty_command().
+
+	local timeFuel is time:seconds + 5.
+	until time:seconds > timeFuel {
+		write_screen_see("Balance fuel", false).
 	}
-	if (rsHDCH4:amount / rsBDCH4:amount) > ratFlHDBD {
-		set trnCH4H2B to transfer("LqdMethane", ptSSHeader, ptSSBody, rsHDCH4:amount / 200).
-		if (trnCH4H2B:active = false) { set trnCH4H2B:active to true. }
-	} else {
-		set trnCH4B2H to transfer("LqdMethane", ptSSBody, ptSSHeader, rsHDCH4:amount / 200).
+	until ptRaptorSLA:position:mag > mRapA2COM or rsHDLOX:capacity = rsHDLOX:amount {
+		write_screen_see("Balance fuel", false).
+		set trnLOXB2H to transfer("lqdOxygen", ptSSBody, ptSSHeader, 57).
+		if (trnLOXB2H:active = false) { set trnLOXB2H:active to true. }
+		set trnCH4B2H to transfer("LqdMethane", ptSSBody, ptSSHeader, 43).
 		if (trnCH4B2H:active = false) { set trnCH4B2H:active to true. }
+		wait 0.1.
+	}
+	until ptRaptorSLA:position:mag > mRapA2COM {
+		write_screen_see("Balance fuel", false).
+		set trnLOXB2H to transfer("lqdOxygen", ptSSBody, ptSSCommand, 57).
+		if (trnLOXB2H:active = false) { set trnLOXB2H:active to true. }
+		set trnCH4B2H to transfer("LqdMethane", ptSSBody, ptSSCommand, 43).
+		if (trnCH4B2H:active = false) { set trnCH4B2H:active to true. }
+		wait 0.1.
 	}
 }
 
+// Stage: UPPER ATMOSPHERE
+until SHIP:altitude < mAltThermo {
+	write_screen_see("Upper atmos.", false).
+}
+
 // Stage: THERMOSPHERE
+sas off.
 for mdSSFlap in arrSSFlaps {
 	// Disable manual control
 	mdSSFlap:setfield("pitch", true).
@@ -570,11 +617,14 @@ until abs(SHIP:groundspeed / SHIP:verticalspeed) < 0.58 {
 }
 
 // Stage: BELLY FLOP
+set degPitMax to 100.
+set degPitMin to 60.
 set pidPit to pidLoop(arrPitFlop[0], arrPitFlop[1], arrPitFlop[2]).
 set pidYaw to pidLoop(arrYawFlop[0], arrYawFlop[1], arrYawFlop[2], -2, 2).
 set pidRol to pidLoop(arrRolFlop[0], arrRolFlop[1], arrRolFlop[2], -10, 10).
+lock mpsVrtTrg to (mAltTrg - SHIP:altitude) / 5.
 
-until SHIP:altitude < mAltFnB {
+until abs(SHIP:verticalspeed) > abs(mpsVrtTrg / 3) {
 	write_screen_see("Bellyflop (Flaps)", true).
 	set degPitTrg to calculate_srp().
 	set degYawTrg to 0 - (degBerPad * 2).
@@ -583,6 +633,8 @@ until SHIP:altitude < mAltFnB {
 }
 
 // Stage: FLIP & BURN
+empty_header().
+empty_command().
 mdSSBDRCS:setfield("rcs", false).
 rcs on.
 set degPitTrg to 170.
@@ -593,6 +645,7 @@ lock throttle to 1.
 set SHIP:control:yaw to 0.
 set SHIP:control:roll to 0.
 
+// set SHIP:control:pitch to 1.
 until ptRaptorSLA:thrust > kNThrMin {
 	write_screen_see("Flip & Burn", true).
 	set SHIP:control:pitch to pidRCS:update(time:seconds, degPitAct - degPitTrg).
@@ -609,27 +662,31 @@ lock degVAng to vAng(srfPrograde:vector, pad:position).
 lock axsProDes to vcrs(srfPrograde:vector, pad:position).
 lock rotProDes to angleAxis(max(0 - degDflMax, degVAng * (0 - 8) - 1), axsProDes).
 lock steering to lookdirup(rotProDes * srfRetrograde:vector, heading(degPadEnt, 0):vector).
-lock mpsVrtTrg to (mAltTrg - SHIP:altitude) / 5.
 
 until SHIP:verticalspeed > mpsVrtTrg {
 	write_screen_see("Landing Burn", true).
 }
 
 // Stage: BALANCE THROTTLE
+lock steering to lookDirUp(srfRetrograde:vector, heading(degPadEnt, 0):vector).
 lock mpsVrtTrg to (mAltTrg - SHIP:altitude) / 5.
-lock throttle to max(0.0001, pidThr:update(time:seconds, SHIP:verticalspeed - mpsVrtTrg)). // Attempt to hover at mAltTrg
+lock throttle to max(0.4, pidThr:update(time:seconds, SHIP:verticalspeed - mpsVrtTrg)). // Attempt to hover at mAltTrg
 
-until SHIP:altitude < mAltWP1 {
+until SHIP:altitude < mAltWP1 or SHIP:verticalspeed > -20 {
 	write_screen_see("Balance Throttle", true).
 }
 
 // Stage: TOWER APPROACH
 set mAltTrg to mAltAP2.
+local mpsStart is SHIP:verticalspeed.
+local mpsEnd is -5.
+local mAltStart is SHIP:altitude.
+lock mpsVrtTrg to mpsEnd + (mpsStart * ((SHIP:altitude - mAltTrg) / (mAltStart - mAltTrg))).
 if SHIP:mass > 180 {
-    ptRaptorSLA:shutdown.
+	ptRaptorSLA:shutdown.
 } else {
-    ptRaptorSLB:shutdown.
-    ptRaptorSLC:shutdown.
+	ptRaptorSLB:shutdown.
+	ptRaptorSLC:shutdown.
 }
 lock vecSrfVel to vxcl(up:vector, SHIP:velocity:surface).
 set sTTR to 0.01 + min(5, mSrf / 10).
@@ -648,8 +705,9 @@ until mSrf < 5 and SHIP:groundspeed < 3 and SHIP:altitude < mAltWP2 {
 // Stage: DESCENT
 lock steering to lookDirUp(up:vector, heading(degPadEnt, 0):vector).
 set mAltTrg to mAltAP3.
+local B is SHIP:bounds. // get the :bounds suffix ONCE.
 
-until SHIP:altitude < mAltWP4 {
+until B:bottomaltradar < mAltRad {
 	write_screen_see("Descent", true).
 	set_rcs_translate(vecThr:mag, degThrHed).
 }

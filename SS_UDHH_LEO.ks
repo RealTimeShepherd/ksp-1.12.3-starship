@@ -32,7 +32,7 @@ parameter useCam.
 global log_sul is "Telemetry/ss_udhh_leo_log.csv".
 
 // Define Boca Chica catch tower - long term get this from target info
-global pad is latlng(25.9669968, -97.1416771). // Tower Catch point - BC OLIT 1
+global pad_sul is latlng(25.9669968, -97.1416771). // Tower Catch point - BC OLIT 1
 
 // Fuel ratios
 global ratLOXRap is 0.57. // Ratio of LOX in the fuel mix for Raptor
@@ -44,12 +44,14 @@ global ratSSTKCM is 0.07837. // Ratio of Tanker command capacity to Tanker body
 global lTopUp is 25000.
 
 // Event triggers
-global mMaxPadDist is 13000000.
-global mTrgPE is 90000.
+global mMaxDist is 13000000. // Script start when pad is over this distance away
+global mTrgPE is 90000. // Lower Periapsis to this altitude
+global mPitBak is 250000. // Switch SAS mode to slowly pitch back at this altitude
+global mAltEDL is 140000. // Outer bounds of atmosphere - launch EDL script
 
-global arrSSFlaps is list().
-global arrRaptorVac is list().
-global arrRaptorSL is list().
+global arrSSFlaps_sul is list().
+global arrRaptorVac_sul is list().
+global arrRaptorSL_sul is list().
 
 //---------------------------------------------------------------------------------------------------------------------
 // #endregion
@@ -59,27 +61,27 @@ global arrRaptorSL is list().
 
 // Bind to ship parts (vdot calculations are used to distinguish between the Tanker and Depot StarShips)
 for pt in SHIP:parts {
-	if pt:name:startswith("SEP.S20.HEADER") and vdot(ship:facing:topvector, pt:position) < 0 { set ptSSHeader to pt. }
+	if pt:name:startswith("SEP.S20.HEADER") and vdot(ship:facing:topvector, pt:position) < 0 { set ptSSHeader_sul to pt. }
 	if pt:name:startswith("SEP.S20.HEADER") and vdot(ship:facing:topvector, pt:position) > 0 { set ptDPHeader to pt. }
-	if pt:name:startswith("SEP.S20.TANKER") and vdot(ship:facing:topvector, pt:position) < 0 { set ptSSCommand to pt. }
+	if pt:name:startswith("SEP.S20.TANKER") and vdot(ship:facing:topvector, pt:position) < 0 { set ptSSCommand_sul to pt. }
 	if pt:name:startswith("SEP.S20.TANKER") and vdot(ship:facing:topvector, pt:position) > 0 { set ptDPCommand to pt. }
-	if pt:name:startswith("SEP.S20.CREW") and vdot(ship:facing:topvector, pt:position) < 0 { set ptSSCommand to pt. }
-	if pt:name:startswith("SEP.S20.BODY") and vdot(ship:facing:topvector, pt:position) < 0 { set ptSSBody to pt. }
+	if pt:name:startswith("SEP.S20.CREW") and vdot(ship:facing:topvector, pt:position) < 0 { set ptSSCommand_sul to pt. }
+	if pt:name:startswith("SEP.S20.BODY") and vdot(ship:facing:topvector, pt:position) < 0 { set ptSSBody_sul to pt. }
 	if pt:name:startswith("SEP.S20.BODY") and vdot(ship:facing:topvector, pt:position) > 0 { set ptDPBody to pt. }
-	if pt:name:startswith("SEP.RAPTOR.VAC") and vdot(ship:facing:topvector, pt:position) < 0 { arrRaptorVac:add(pt). }
-	if pt:name:startswith("SEP.RAPTOR.SL") and vdot(ship:facing:topvector, pt:position) < 0 { arrRaptorSL:add(pt). }
-	if pt:name:startswith("SEP.S20.FWD.LEFT") { set ptFlapFL to pt. }
-	if pt:name:startswith("SEP.S20.FWD.RIGHT") { set ptFlapFR to pt. }
-	if pt:name:startswith("SEP.S20.AFT.LEFT") { set ptFlapAL to pt. }
-	if pt:name:startswith("SEP.S20.AFT.RIGHT") { set ptFlapAR to pt. }
+	if pt:name:startswith("SEP.RAPTOR.VAC") and vdot(ship:facing:topvector, pt:position) < 0 { arrRaptorVac_sul:add(pt). }
+	if pt:name:startswith("SEP.RAPTOR.SL") and vdot(ship:facing:topvector, pt:position) < 0 { arrRaptorSL_sul:add(pt). }
+	if pt:name:startswith("SEP.S20.FWD.LEFT") { set ptFlapFL_sul to pt. }
+	if pt:name:startswith("SEP.S20.FWD.RIGHT") { set ptFlapFR_sul to pt. }
+	if pt:name:startswith("SEP.S20.AFT.LEFT") { set ptFlapAL_sul to pt. }
+	if pt:name:startswith("SEP.S20.AFT.RIGHT") { set ptFlapAR_sul to pt. }
 }
 
 // Bind to resources within StarShip Tanker Header
-if defined ptSSHeader {
+if defined ptSSHeader_sul {
 	// Bind to header tanks
-	for rsc in ptSSHeader:resources {
-		if rsc:name = "LqdOxygen" { set rsHDLOX to rsc. }
-		if rsc:name = "LqdMethane" { set rsHDCH4 to rsc. }
+	for rsc in ptSSHeader_sul:resources {
+		if rsc:name = "LqdOxygen" { set rsHDLOX_sul to rsc. }
+		if rsc:name = "LqdMethane" { set rsHDCH4_sul to rsc. }
 	}
 }
 
@@ -93,60 +95,46 @@ if defined ptDPHeader {
 }
 
 // Bind to modules & resources within StarShip Tanker Command
-if defined ptSSCommand {
-	set mdSSCMRCS to ptSSCommand:getmodule("ModuleRCSFX").
+if defined ptSSCommand_sul {
+	set mdSSCMRCS to ptSSCommand_sul:getmodule("ModuleRCSFX").
 	// Bind to command tanks
-	for rsc in ptSSCommand:resources {
-		if rsc:name = "LqdOxygen" { set rsCMLOX to rsc. }
-		if rsc:name = "LqdMethane" { set rsCMCH4 to rsc. }
-	}
-}
-
-// Bind to modules & resources within StarShip Depot Command
-if defined ptDPCommand {
-	// Bind to command tanks
-	for rsc in ptDPCommand:resources {
-		if rsc:name = "LqdOxygen" { set rsDPCMLOX to rsc. }
-		if rsc:name = "LqdMethane" { set rsDPCMCH4 to rsc. }
+	for rsc in ptSSCommand_sul:resources {
+		if rsc:name = "LqdOxygen" { set rsCMLOX_sul to rsc. }
+		if rsc:name = "LqdMethane" { set rsCMCH4_sul to rsc. }
 	}
 }
 
 // Bind to modules & resources within StarShip Tanker Body
-if defined ptSSBody {
-	set mdSSBDRCS to ptSSBody:getmodule("ModuleRCSFX").
+if defined ptSSBody_sul {
+	set mdSSBDRCS to ptSSBody_sul:getmodule("ModuleRCSFX").
 	// Bind to command tanks
-	for rsc in ptSSBody:resources {
-		if rsc:name = "LqdOxygen" { set rsBDLOX to rsc. }
-		if rsc:name = "LqdMethane" { set rsBDCH4 to rsc. }
+	for rsc in ptSSBody_sul:resources {
+		if rsc:name = "LqdOxygen" { set rsBDLOX_sul to rsc. }
+		if rsc:name = "LqdMethane" { set rsBDCH4_sul to rsc. }
 	}
 }
 
-// Bind to modules & resources within StarShip Depot Body
+// Bind to modules within StarShip Depot Body
 if defined ptDPBody {
 	set mdDPBDDock to ptDPBody:getmodule("ModuleDockingNode").
-	// Bind to command tanks
-	for rsc in ptDPBody:resources {
-		if rsc:name = "LqdOxygen" { set rsDPBDLOX to rsc. }
-		if rsc:name = "LqdMethane" { set rsDPBDCH4 to rsc. }
-	}
 }
 
 // Bind to modules within StarShip Flaps
-if defined ptFlapFL {
-	set mdFlapFLCS to ptFlapFL:getmodule("ModuleSEPControlSurface").
-	arrSSFlaps:add(mdFlapFLCS).
+if defined ptFlapFL_sul {
+	set mdFlapFLCS_sul to ptFlapFL_sul:getmodule("ModuleSEPControlSurface").
+	arrSSFlaps_sul:add(mdFlapFLCS_sul).
 }
-if defined ptFlapFR {
-	set mdFlapFRCS to ptFlapFR:getmodule("ModuleSEPControlSurface").
-	arrSSFlaps:add(mdFlapFRCS).
+if defined ptFlapFR_sul {
+	set mdFlapFRCS_sul to ptFlapFR_sul:getmodule("ModuleSEPControlSurface").
+	arrSSFlaps_sul:add(mdFlapFRCS_sul).
 }
-if defined ptFlapAL {
-	set mdFlapALCS to ptFlapAL:getmodule("ModuleSEPControlSurface").
-	arrSSFlaps:add(mdFlapALCS).
+if defined ptFlapAL_sul {
+	set mdFlapALCS_sul to ptFlapAL_sul:getmodule("ModuleSEPControlSurface").
+	arrSSFlaps_sul:add(mdFlapALCS_sul).
 }
-if defined ptFlapAR {
-	set mdFlapARCS to ptFlapAR:getmodule("ModuleSEPControlSurface").
-	arrSSFlaps:add(mdFlapARCS).
+if defined ptFlapAR_sul {
+	set mdFlapARCS_sul to ptFlapAR_sul:getmodule("ModuleSEPControlSurface").
+	arrSSFlaps_sul:add(mdFlapARCS_sul).
 }
 
 //---------------------------------------------------------------------------------------------------------------------
@@ -155,8 +143,8 @@ if defined ptFlapAR {
 // #region LOCKS
 //---------------------------------------------------------------------------------------------------------------------
 
-lock mPad to pad:distance.
-lock lProp to rsHDCH4:amount + rsCMCH4:amount + rsBDCH4:amount.
+lock mPad_sul to pad_sul:distance.
+lock lProp to rsHDCH4_sul:amount + rsCMCH4_sul:amount + rsBDCH4_sul:amount.
 
 //---------------------------------------------------------------------------------------------------------------------
 // #endregion
@@ -200,7 +188,7 @@ function write_screen_sul { // Write dynamic display elements and write telemetr
 	print round(SHIP:velocity:orbit:mag, 0) + "    " at (14, 4).
 	print round(SHIP:verticalspeed, 0) + "    " at (14, 5).
 	// print "----------------------------".
-	print round(mPad / 1000, 0) + "    " at (14, 7).
+	print round(mPad_sul / 1000, 0) + "    " at (14, 7).
 	// print "----------------------------".
 	print round(lProp, 0) + "    " at (14, 9).
 	print round(throttle * 100, 2) + "    " at (14, 10).
@@ -212,7 +200,7 @@ function write_screen_sul { // Write dynamic display elements and write telemetr
 		set logline to logline + round(SHIP:velocity:orbit:mag, 0) + ",".
 		set logline to logline + round(SHIP:verticalspeed, 0) + ",".
 		set logline to logline + round(SHIP:airspeed, 0) + ",".
-		set logline to logline + round(mPad, 0) + ",".
+		set logline to logline + round(mPad_sul, 0) + ",".
 		set logline to logline + round(lProp, 0) + ",".
 		set logline to logline + round(throttle * 100, 2) + ",".
 		log logline to log_sul.
@@ -220,10 +208,10 @@ function write_screen_sul { // Write dynamic display elements and write telemetr
 }
 
 function fill_depot {
-	set trnLOXCM to transfer("lqdOxygen", ptSSCommand, ptDPCommand, rsCMLOX:amount).
-	set trnLOXBD to transfer("lqdOxygen", ptSSBody, ptDPBody, rsBDLOX:amount).
-	set trnCH4CM to transfer("LqdMethane", ptSSCommand, ptDPCommand, rsCMCH4:amount).
-	set trnCH4BD to transfer("LqdMethane", ptSSBody, ptDPBody, rsBDCH4:amount).
+	local trnLOXCM is transfer("lqdOxygen", ptSSCommand_sul, ptDPCommand, rsCMLOX_sul:amount).
+	local trnLOXBD is transfer("lqdOxygen", ptSSBody_sul, ptDPBody, rsBDLOX_sul:amount).
+	local trnCH4CM is transfer("LqdMethane", ptSSCommand_sul, ptDPCommand, rsCMCH4_sul:amount).
+	local trnCH4BD is transfer("LqdMethane", ptSSBody_sul, ptDPBody, rsBDCH4_sul:amount).
 	if (trnLOXCM:active = false) { set trnLOXCM:active to true. }
 	if (trnLOXBD:active = false) { set trnLOXBD:active to true. }
 	if (trnCH4CM:active = false) { set trnCH4CM:active to true. }
@@ -231,12 +219,12 @@ function fill_depot {
 }
 
 function fill_depot_header {
-	set lReqHDLOX to rsDPHDLOX:capacity - rsDPHDLOX:amount.
-	set lReqHDCH4 to rsDPHDCH4:capacity - rsDPHDCH4:amount.
-	set trnLOXCM to transfer("lqdOxygen", ptDPCommand, ptDPHeader, lReqHDLOX * ratSSTKCM).
-	set trnLOXBD to transfer("lqdOxygen", ptDPBody, ptDPHeader, lReqHDLOX * ratSSTKBD).
-	set trnCH4CM to transfer("LqdMethane", ptDPCommand, ptDPHeader, lReqHDCH4 * ratSSTKCM).
-	set trnCH4BD to transfer("LqdMethane", ptDPBody, ptDPHeader, lReqHDCH4 * ratSSTKBD).
+	local lReqHDLOX is rsDPHDLOX:capacity - rsDPHDLOX:amount.
+	local lReqHDCH4 is rsDPHDCH4:capacity - rsDPHDCH4:amount.
+	local trnLOXCM is transfer("lqdOxygen", ptDPCommand, ptDPHeader, lReqHDLOX * ratSSTKCM).
+	local trnLOXBD is transfer("lqdOxygen", ptDPBody, ptDPHeader, lReqHDLOX * ratSSTKBD).
+	local trnCH4CM is transfer("LqdMethane", ptDPCommand, ptDPHeader, lReqHDCH4 * ratSSTKCM).
+	local trnCH4BD is transfer("LqdMethane", ptDPBody, ptDPHeader, lReqHDCH4 * ratSSTKBD).
 	if (trnLOXCM:active = false) { set trnLOXCM:active to true. }
 	if (trnLOXBD:active = false) { set trnLOXBD:active to true. }
 	if (trnCH4CM:active = false) { set trnCH4CM:active to true. }
@@ -244,19 +232,19 @@ function fill_depot_header {
 }
 
 function fill_tanker_header {
-	set trnLOXCM to transfer("lqdOxygen", ptDPHeader, ptSSHeader, rsHDLOX:capacity - rsHDLOX:amount).
-	set trnCH4CM to transfer("LqdMethane", ptDPHeader, ptSSHeader, rsHDCH4:capacity - rsHDCH4:amount).
+	local trnLOXCM is transfer("lqdOxygen", ptDPHeader, ptSSHeader_sul, rsHDLOX_sul:capacity - rsHDLOX_sul:amount).
+	local trnCH4CM is transfer("LqdMethane", ptDPHeader, ptSSHeader_sul, rsHDCH4_sul:capacity - rsHDCH4_sul:amount).
 	if (trnLOXCM:active = false) { set trnLOXCM:active to true. }
 	if (trnCH4CM:active = false) { set trnCH4CM:active to true. }
 }
 
 function topup_tanker_body { // The header tank doesn't quite have enough now that 'residuals' are implemented in RO
-	set lReqHDLOX to lTopUp * ratLOXRap.
-	set lReqHDCH4 to lTopUp * ratCH4Rap.
-	set trnLOXCM to transfer("lqdOxygen", ptDPCommand, ptSSBody, lReqHDLOX * ratSSTKCM).
-	set trnLOXBD to transfer("lqdOxygen", ptDPBody, ptSSBody, lReqHDLOX * ratSSTKBD).
-	set trnCH4CM to transfer("LqdMethane", ptDPCommand, ptSSBody, lReqHDCH4 * ratSSTKCM).
-	set trnCH4BD to transfer("LqdMethane", ptDPBody, ptSSBody, lReqHDCH4 * ratSSTKBD).
+	local lReqHDLOX is lTopUp * ratLOXRap.
+	local lReqHDCH4 is lTopUp * ratCH4Rap.
+	local trnLOXCM is transfer("lqdOxygen", ptDPCommand, ptSSBody_sul, lReqHDLOX * ratSSTKCM).
+	local trnLOXBD is transfer("lqdOxygen", ptDPBody, ptSSBody_sul, lReqHDLOX * ratSSTKBD).
+	local trnCH4CM is transfer("LqdMethane", ptDPCommand, ptSSBody_sul, lReqHDCH4 * ratSSTKCM).
+	local trnCH4BD is transfer("LqdMethane", ptDPBody, ptSSBody_sul, lReqHDCH4 * ratSSTKBD).
 	if (trnLOXCM:active = false) { set trnLOXCM:active to true. }
 	if (trnLOXBD:active = false) { set trnLOXBD:active to true. }
 	if (trnCH4CM:active = false) { set trnCH4CM:active to true. }
@@ -283,24 +271,24 @@ rcs off.
 sas off.
 
 // Enable all fuel tanks
-if defined rsHDLOX { set rsHDLOX:enabled to true. }
-if defined rsHDCH4 { set rsHDCH4:enabled to true. }
-if defined rsCMLOX { set rsCMLOX:enabled to true. }
-if defined rsCMCH4 { set rsCMCH4:enabled to true. }
-if defined rsBDLOX { set rsBDLOX:enabled to true. }
-if defined rsBDCH4 { set rsBDCH4:enabled to true. }
+if defined rsHDLOX_sul { set rsHDLOX_sul:enabled to true. }
+if defined rsHDCH4_sul { set rsHDCH4_sul:enabled to true. }
+if defined rsCMLOX_sul { set rsCMLOX_sul:enabled to true. }
+if defined rsCMCH4_sul { set rsCMCH4_sul:enabled to true. }
+if defined rsBDLOX_sul { set rsBDLOX_sul:enabled to true. }
+if defined rsBDCH4_sul { set rsBDCH4_sul:enabled to true. }
 
 // Kill throttle
 lock throttle to 0.
 
 // Shut down sea level Raptors
-for ptRaptorSL in arrRaptorSL { ptRaptorSL:shutdown. }
+for ptRaptorSL in arrRaptorSL_sul { ptRaptorSL:shutdown. }
 
 // Shut down vacuum Raptors
-for ptRaptorVac in arrRaptorVac { ptRaptorVac:shutdown. }
+for ptRaptorVac in arrRaptorVac_sul { ptRaptorVac:shutdown. }
 
 // Set flaps to default position
-for mdSSFlap in arrSSFlaps {
+for mdSSFlap in arrSSFlaps_sul {
 	// Disable manual control
 	mdSSFlap:setfield("pitch", true).
 	mdSSFlap:setfield("yaw", true).
@@ -314,7 +302,7 @@ for mdSSFlap in arrSSFlaps {
 if useCam {
 	// Camera settings
 	global cam is addons:camera:flightcamera.
-	set cam:target to ptSSBody.
+	set cam:target to ptSSBody_sul.
 	wait 1.
 	set cam:mode to "free".
 	wait 1.
@@ -333,8 +321,7 @@ write_console_sul().
 // #region FLIGHT
 //---------------------------------------------------------------------------------------------------------------------
 
-if mdDPBDDock:hasevent("undock") {
-
+if vAng(SHIP:facing:vector, retrograde:vector) > 2 {
 	// STAGE: ORIENT FOR UNDOCK
 	rcs on.
 	lock steering to lookDirUp(retrograde:vector, up:vector).
@@ -343,63 +330,80 @@ if mdDPBDDock:hasevent("undock") {
 		write_screen_sul("Orient for undock", true).
 	}
 	unlock steering.
-	rcs off.
-	sas on.
-	wait 1.
-	set sasMode to "Retrograde".
-
-	// Stage: WAIT FOR UNDOCK
-	until mPad > mMaxPadDist {
-		write_screen_sul("Waiting: " + round(((mMaxPadDist - mPad) / 1000), 0) + " km", false).
-	}
-
-	// Stage: FUEL TRANSFER
-	fill_depot().
-	fill_depot_header().
-	fill_tanker_header().
-	topup_tanker_body().
-	local timeFuel is time:seconds + 10.
-	until time:seconds > timeFuel {
-		write_screen_sul("Fuel transfer", true).
-	}
-
-	// Stage: UNDOCK
-	sas off.
-	mdDPBDDock:doevent("undock").
-	rcs on.
-	set SHIP:control:top to -1.
-	local timeFire is time:seconds + 2.
-	until time:seconds > timeFire {
-		write_screen_sul("Undock", true).
-	}
-
-	// Stage: BACKOFF
-	set SHIP:control:top to 0.
-	local timeBackoff is time:seconds + 5.
-	until time:seconds > timeBackoff {
-		write_screen_sul("Backoff", true).
-	}
-
-	// Stage: Lower PE
-	for ptRaptorVac in arrRaptorVac { ptRaptorVac:activate. }
-	lock steering to retrograde.
-	lock throttle to 1.
-	until SHIP:orbit:periapsis < mTrgPE {
-		write_screen_sul("Lower Perigee", true).
-	}
-	lock throttle to 0.
-	for ptRaptorVac in arrRaptorVac { ptRaptorVac:shutdown. }
-
-	// Stage: FACE PROGRADE
-	lock steering to lookDirUp(prograde:vector, up:vector).
-	set timOrient to time:seconds + 30.
-	until time:seconds > timOrient {
-		write_screen_sul("Orient for coast", true).
-	}
-	unlock steering.
-	rcs off.
-	sas on.
-	wait 0.2.
-	set sasMode to "Prograde".
-
 }
+
+// Stage: WAIT FOR UNDOCK
+rcs off.
+sas on.
+wait 1.
+set sasMode to "Retrograde".
+
+until mPad_sul > mMaxDist {
+	write_screen_sul("Waiting: " + round(((mMaxDist - mPad_sul) / 1000), 0) + " km", false).
+}
+
+// Stage: FUEL TRANSFER
+fill_depot().
+fill_depot_header().
+fill_tanker_header().
+topup_tanker_body().
+local timeFuel is time:seconds + 10.
+until time:seconds > timeFuel {
+	write_screen_sul("Fuel transfer", true).
+}
+
+// Stage: UNDOCK
+sas off.
+mdDPBDDock:doevent("undock").
+rcs on.
+set SHIP:control:top to -1.
+local timeFire is time:seconds + 2.
+until time:seconds > timeFire {
+	write_screen_sul("Undock", true).
+}
+
+// Stage: BACKOFF
+set SHIP:control:top to 0.
+local timeBackoff is time:seconds + 5.
+until time:seconds > timeBackoff {
+	write_screen_sul("Backoff", true).
+}
+
+// Stage: Lower PE
+for ptRaptorVac in arrRaptorVac_sul { ptRaptorVac:activate. }
+lock steering to retrograde.
+lock throttle to 1.
+until SHIP:orbit:periapsis < mTrgPE {
+	write_screen_sul("Lower Perigee", true).
+}
+lock throttle to 0.
+for ptRaptorVac in arrRaptorVac_sul { ptRaptorVac:shutdown. }
+
+// Stage: FACE PROGRADE
+lock steering to lookDirUp(prograde:vector, up:vector).
+set timOrient to time:seconds + 30.
+until time:seconds > timOrient {
+	write_screen_sul("Orient for coast", true).
+}
+
+// Stage: COAST TO ENTRY
+unlock steering.
+rcs off.
+sas on.
+wait 0.2.
+set sasMode to "Prograde".
+
+until SHIP:altitude < mPitBak {
+	write_screen_sul("Coast to entry", true).
+}
+
+// Stage: PITCH BACK
+set sasMode to "Stability".
+
+until SHIP:altitude < mAltEDL {
+	write_screen_sul("Coast to entry", true).
+}
+
+// Stage: EDL
+set ag7 to false.
+runPath("SS_EDL_Earth.ks").

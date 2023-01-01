@@ -41,16 +41,17 @@ global mRapA2COM is 23.9. // The distance from the vessel centre of mass to the 
 
 // Long range pitch tracking
 // Ship mass of 151 - Trying 88
-// Ship mass of 137 - 86 works fine (Header tank only)
-global cnsLrp is (SHIP:mass / 12) + 88. // 89 - original - 86 works better for low mass StarShip
+// Ship mass of 131.7 - 86 works fine (Header tank only)
+global cnsLrp is (11 * SHIP:mass / 60) + 73. // Jury is still out regarding this value - suspect will not work for high mass
+//global cnsLrp is (SHIP:mass / 12) + 88. // 89 - original - 86 works better for low mass StarShip
 global mLrpTrg is 12200.
 global ratLrp is 0.011.
 global qrcLrp is 0.
 
-// Short range pitch tracking
-// Ship mass of 151 - We think 0.017 - maybe paired with 88 for lrp
-// Ship mass of 137 - 0.016 works fine
-global cnsSrp is 0.017. // surface m gained per m lost in altitude for every degree of pitch forward, 17 - original
+// Short range pitch tracking - multiple tests make 0.016 look like the best all rounder, masses from 130 - 160t
+global cnsSrp is 0.016.
+//global cnsSrp is (SHIP:mass / 20000) + 0.0095. // surface m gained per m lost in altitude for every degree of pitch forward
+//global cnsSrp is 0.017. // surface m gained per m lost in altitude for every degree of pitch forward, 17 - original
 global mSrpTrgDst is 200.
 global mSrpTrgAlt is 1200.
 
@@ -272,6 +273,10 @@ function write_console_see { // Write unchanging display elements and header lin
 	set logline to logline + "Throttle,".
 	set logline to logline + "Target VSpd,".
 	log logline to log_see.
+
+	// deletepath("PitchTracking.txt").
+	// local trackLine is "cnsLrp: " + cnsLrp + " | cnsSrp: " + cnsSrp + " | SHIP:mass: " + SHIP:mass.
+	// log trackline to "PitchTracking.txt".
 }
 
 function write_screen_see { // Write dynamic display elements and write telemetry to logfile
@@ -416,22 +421,22 @@ function set_flaps { // Sets the angle of the flaps combining the trim and the t
 }
 
 function fill_header {
-	set trnLOXCM to transfer("lqdOxygen", ptSSBody, ptSSHeader, rsBDLOX:amount).
-	set trnCH4CM to transfer("LqdMethane", ptSSBody, ptSSHeader, rsBDCH4:amount).
+	local trnLOXCM is transfer("lqdOxygen", ptSSBody, ptSSHeader, rsBDLOX:amount).
+	local trnCH4CM is transfer("LqdMethane", ptSSBody, ptSSHeader, rsBDCH4:amount).
 	if (trnLOXCM:active = false) { set trnLOXCM:active to true. }
 	if (trnCH4CM:active = false) { set trnCH4CM:active to true. }
 }
 
 function empty_header {
-	set trnLOXCM to transfer("lqdOxygen", ptSSHeader, ptSSBody, rsHDLOX:amount).
-	set trnCH4CM to transfer("LqdMethane", ptSSHeader, ptSSBody, rsHDCH4:amount).
+	local trnLOXCM is transfer("lqdOxygen", ptSSHeader, ptSSBody, rsHDLOX:amount).
+	local trnCH4CM is transfer("LqdMethane", ptSSHeader, ptSSBody, rsHDCH4:amount).
 	if (trnLOXCM:active = false) { set trnLOXCM:active to true. }
 	if (trnCH4CM:active = false) { set trnCH4CM:active to true. }
 }
 
 function empty_command {
-	set trnLOXCM to transfer("lqdOxygen", ptSSCommand, ptSSBody, rsHDLOX:amount).
-	set trnCH4CM to transfer("LqdMethane", ptSSCommand, ptSSBody, rsHDCH4:amount).
+	local trnLOXCM is transfer("lqdOxygen", ptSSCommand, ptSSBody, rsHDLOX:amount).
+	local trnCH4CM is transfer("LqdMethane", ptSSCommand, ptSSBody, rsHDCH4:amount).
 	if (trnLOXCM:active = false) { set trnLOXCM:active to true. }
 	if (trnCH4CM:active = false) { set trnCH4CM:active to true. }
 }
@@ -517,7 +522,7 @@ if SHIP:altitude > mAltUpper {
 	until time:seconds > timeFuel {
 		write_screen_see("Balance fuel", false).
 	}
-	until ptRaptorSLA:position:mag > mRapA2COM or rsHDLOX:capacity = rsHDLOX:amount {
+	until ptRaptorSLA:position:mag > mRapA2COM or rsHDLOX:capacity = rsHDLOX:amount or rsBDLOX:amount = 0 {
 		write_screen_see("Balance fuel", false).
 		set trnLOXB2H to transfer("lqdOxygen", ptSSBody, ptSSHeader, 57).
 		if (trnLOXB2H:active = false) { set trnLOXB2H:active to true. }
@@ -525,7 +530,7 @@ if SHIP:altitude > mAltUpper {
 		if (trnCH4B2H:active = false) { set trnCH4B2H:active to true. }
 		wait 0.1.
 	}
-	until ptRaptorSLA:position:mag > mRapA2COM {
+	until ptRaptorSLA:position:mag > mRapA2COM or rsBDLOX:amount = 0 {
 		write_screen_see("Balance fuel", false).
 		set trnLOXB2H to transfer("lqdOxygen", ptSSBody, ptSSCommand, 57).
 		if (trnLOXB2H:active = false) { set trnLOXB2H:active to true. }
@@ -709,7 +714,6 @@ local B is SHIP:bounds. // get the :bounds suffix ONCE.
 until B:bottomaltradar < mAltRad {
 	write_screen_see("Descent", true).
 	set_rcs_translate(vecThr:mag, degThrHed).
-	print round(B:bottomaltradar, 2) + " m" at (0, 22).
 }
 
 // Stage: TOWER CATCH

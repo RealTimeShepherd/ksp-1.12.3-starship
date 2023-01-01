@@ -453,10 +453,20 @@ until SHIP:mass > tCurMass {
 	set SHIP:control:top to 0 - pidZ:update(time:seconds, mDockDltZ).
 }
 
-// Stage: Fuel transfer
-unlock steering.
-rcs off.
-set ag8 to false.
-until false {
-	write_screen_srl("Fuel transfer", true).
+if vAng(SHIP:facing:vector, retrograde:vector) > 2 {
+	// STAGE: ORIENT FOR COAST
+	rcs on.
+	lock steering to lookDirUp(retrograde:vector, up:vector).
+	local timOrient is time:seconds + 30.
+	until time:seconds > timOrient {
+		write_screen_srl("Orient for coast", true).
+	}
+	unlock steering.
 }
+
+// Stage: COAST
+rcs off.
+sas on.
+wait 1.
+set sasMode to "Retrograde".
+wait 1.

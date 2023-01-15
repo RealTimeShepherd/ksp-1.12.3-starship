@@ -457,7 +457,7 @@ if vAng(SHIP:facing:vector, retrograde:vector) > 2 {
 	// STAGE: ORIENT FOR COAST
 	rcs on.
 	lock steering to lookDirUp(retrograde:vector, up:vector).
-	local timOrient is time:seconds + 30.
+	local timOrient is time:seconds + 60.
 	until time:seconds > timOrient {
 		write_screen_srl("Orient for coast", true).
 	}

@@ -50,6 +50,10 @@ global mPitBak is 250000. // Switch SAS mode to slowly pitch back at this altitu
 global mAltEDL is 140000. // Outer bounds of atmosphere - launch EDL script
 
 global arrSSFlaps_sul is list().
+global arrRaptorVac0 is list().
+global arrRaptorVac1 is list().
+global arrRaptorSL0 is list().
+global arrRaptorSL1 is list().
 global arrRaptorVac_sul is list().
 global arrRaptorSL_sul is list().
 
@@ -59,21 +63,45 @@ global arrRaptorSL_sul is list().
 // #region BINDINGS
 //---------------------------------------------------------------------------------------------------------------------
 
-// Bind to ship parts (vdot calculations are used to distinguish between the Tanker and Depot StarShips)
+// Bind to ship parts (vdot calculations are used to distinguish between the two StarShips)
 for pt in SHIP:parts {
-	if pt:name:startswith("SEP.S20.HEADER") and vdot(ship:facing:topvector, pt:position) < 0 { set ptSSHeader_sul to pt. }
-	if pt:name:startswith("SEP.S20.HEADER") and vdot(ship:facing:topvector, pt:position) > 0 { set ptDPHeader to pt. }
-	if pt:name:startswith("SEP.S20.TANKER") and vdot(ship:facing:topvector, pt:position) < 0 { set ptSSCommand_sul to pt. }
-	if pt:name:startswith("SEP.S20.TANKER") and vdot(ship:facing:topvector, pt:position) > 0 { set ptDPCommand to pt. }
-	if pt:name:startswith("SEP.S20.CREW") and vdot(ship:facing:topvector, pt:position) < 0 { set ptSSCommand_sul to pt. }
-	if pt:name:startswith("SEP.S20.BODY") and vdot(ship:facing:topvector, pt:position) < 0 { set ptSSBody_sul to pt. }
-	if pt:name:startswith("SEP.S20.BODY") and vdot(ship:facing:topvector, pt:position) > 0 { set ptDPBody to pt. }
-	if pt:name:startswith("SEP.RAPTOR.VAC") and vdot(ship:facing:topvector, pt:position) < 0 { arrRaptorVac_sul:add(pt). }
-	if pt:name:startswith("SEP.RAPTOR.SL") and vdot(ship:facing:topvector, pt:position) < 0 { arrRaptorSL_sul:add(pt). }
+	if pt:name:startswith("SEP.S20.HEADER") and vdot(ship:facing:topvector, pt:position) < 0 { set ptSSHeader0 to pt. }
+	if pt:name:startswith("SEP.S20.HEADER") and vdot(ship:facing:topvector, pt:position) > 0 { set ptSSHeader1 to pt. }
+	if pt:name:startswith("SEP.S20.TANKER") and vdot(ship:facing:topvector, pt:position) < 0 { set ptSSCommand0 to pt. }
+	if pt:name:startswith("SEP.S20.TANKER") and vdot(ship:facing:topvector, pt:position) > 0 { set ptSSCommand1 to pt. }
+	if pt:name:startswith("SEP.S20.CREW") and vdot(ship:facing:topvector, pt:position) < 0 { set ptSSCommand0 to pt. }
+	if pt:name:startswith("SEP.S20.CREW") and vdot(ship:facing:topvector, pt:position) > 0 { set ptSSCommand1 to pt. }
+	if pt:name:startswith("SEP.S20.BODY") and vdot(ship:facing:topvector, pt:position) < 0 { set ptSSBody0 to pt. }
+	if pt:name:startswith("SEP.S20.BODY") and vdot(ship:facing:topvector, pt:position) > 0 { set ptSSBody1 to pt. }
+	if pt:name:startswith("SEP.RAPTOR.VAC") and vdot(ship:facing:topvector, pt:position) < 0 { arrRaptorVac0:add(pt). }
+	if pt:name:startswith("SEP.RAPTOR.VAC") and vdot(ship:facing:topvector, pt:position) > 0 { arrRaptorVac1:add(pt). }
+	if pt:name:startswith("SEP.RAPTOR.SL") and vdot(ship:facing:topvector, pt:position) < 0 { arrRaptorSL0:add(pt). }
+	if pt:name:startswith("SEP.RAPTOR.SL") and vdot(ship:facing:topvector, pt:position) > 0 { arrRaptorSL1:add(pt). }
 	if pt:name:startswith("SEP.S20.FWD.LEFT") { set ptFlapFL_sul to pt. }
 	if pt:name:startswith("SEP.S20.FWD.RIGHT") { set ptFlapFR_sul to pt. }
 	if pt:name:startswith("SEP.S20.AFT.LEFT") { set ptFlapAL_sul to pt. }
 	if pt:name:startswith("SEP.S20.AFT.RIGHT") { set ptFlapAR_sul to pt. }
+}
+
+// Determine from a known part, which set of parts belong to each vessel
+if ptSSBody0:name = "SEP.S20.BODY.NHS" { // 0 is Depot - 1 is StarShip
+	set ptDPHeader to ptSSHeader0.
+	set ptDPCommand to ptSSCommand0.
+	set ptDPBody to ptSSBody0.
+	set ptSSHeader_sul to ptSSHeader1.
+	set ptSSCommand_sul to ptSSCommand1.
+	set ptSSBody_sul to ptSSBody1.
+	set arrRaptorVac_sul to arrRaptorVac1.
+	set arrRaptorSL_sul to arrRaptorSL1.
+} else { // 1 is Depot - 0 is StarShip
+	set ptDPHeader to ptSSHeader1.
+	set ptDPCommand to ptSSCommand1.
+	set ptDPBody to ptSSBody1.
+	set ptSSHeader_sul to ptSSHeader0.
+	set ptSSCommand_sul to ptSSCommand0.
+	set ptSSBody_sul to ptSSBody0.
+	set arrRaptorVac_sul to arrRaptorVac0.
+	set arrRaptorSL_sul to arrRaptorSL0.
 }
 
 // Bind to resources within StarShip Tanker Header
@@ -96,6 +124,7 @@ if defined ptDPHeader {
 
 // Bind to modules & resources within StarShip Tanker Command
 if defined ptSSCommand_sul {
+	set mdSSCMCmd to ptSSCommand_sul:getmodule("ModuleCommand").
 	set mdSSCMRCS to ptSSCommand_sul:getmodule("ModuleRCSFX").
 	// Bind to command tanks
 	for rsc in ptSSCommand_sul:resources {
@@ -117,6 +146,9 @@ if defined ptSSBody_sul {
 // Bind to modules within StarShip Depot Body
 if defined ptDPBody {
 	set mdDPBDDock to ptDPBody:getmodule("ModuleDockingNode").
+}
+if defined ptSSBody_sul {
+	set mdSSBDDock to ptSSBody_sul:getmodule("ModuleDockingNode").
 }
 
 // Bind to modules within StarShip Flaps
@@ -353,11 +385,21 @@ until time:seconds > timeFuel {
 }
 
 // Stage: UNDOCK
+if mdDPBDDock:hasevent("undock") {
+	mdDPBDDock:doevent("undock").
+} else {
+	mdSSBDDock:doevent("undock").
+}
+wait 0.1.
+if kuniverse:activevessel:name <> SHIP:name {
+	set kuniverse:activevessel to SHIP.
+}
+wait 0.1.
 sas off.
-mdDPBDDock:doevent("undock").
 rcs on.
 set SHIP:control:top to -1.
 local timeFire is time:seconds + 2.
+
 until time:seconds > timeFire {
 	write_screen_sul("Undock", true).
 }
@@ -365,6 +407,7 @@ until time:seconds > timeFire {
 // Stage: BACKOFF
 set SHIP:control:top to 0.
 local timeBackoff is time:seconds + 5.
+
 until time:seconds > timeBackoff {
 	write_screen_sul("Backoff", true).
 }
@@ -373,15 +416,17 @@ until time:seconds > timeBackoff {
 for ptRaptorVac in arrRaptorVac_sul { ptRaptorVac:activate. }
 lock steering to retrograde.
 lock throttle to 1.
+
 until SHIP:orbit:periapsis < mTrgPE {
 	write_screen_sul("Lower Perigee", true).
 }
-lock throttle to 0.
-for ptRaptorVac in arrRaptorVac_sul { ptRaptorVac:shutdown. }
 
 // Stage: FACE PROGRADE
+lock throttle to 0.
+for ptRaptorVac in arrRaptorVac_sul { ptRaptorVac:shutdown. }
 lock steering to lookDirUp(prograde:vector, up:vector).
 set timOrient to time:seconds + 30.
+
 until time:seconds > timOrient {
 	write_screen_sul("Orient for coast", true).
 }

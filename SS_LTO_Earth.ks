@@ -54,10 +54,10 @@ global sToTrgVel is 0. // Seconds to target velocity
 global sToZoVrDl is 0. // Seconds to zero vertical speed delta
 global sToOrbIns is 10. // Achieve target vspeed delta of zero this many seconds before orbital insertion
 
+// Target inclination, this should be timed so precession causes alignment on the desired day
+global degOffInc is 70. // Current reckoning of 7 degrees a day, so set to 70 if you want to align in ten days
 global degPitTrg is 10.
 global degYawTrg is 0.
-global degOffInc is 70. // Target inclination, this should be timed so precession causes alignment on the desired day
-                        // Current reckoning of 7 degrees a day, so set to 70 if you want to align in ten days
 
 // PID controller
 global pidYaw is pidLoop(0.5, 0.001, 0.001, -1, 1).

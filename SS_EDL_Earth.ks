@@ -231,7 +231,7 @@ if defined rsCMCH4 {
 
 function write_console_see { // Write unchanging display elements and header line of new CSV file
 	clearScreen.
-	print "Phase:        " at (0, 0).
+	print "Phase:" at (0, 0).
 	print "----------------------------" at (0, 1).
 	print "Altitude:                  m" at (0, 2).
 	print "Dyn pressure:            kpa" at (0, 3).
@@ -275,15 +275,12 @@ function write_console_see { // Write unchanging display elements and header lin
 	set logline to logline + "Target VSpd,".
 	log logline to log_see.
 
-	// deletepath("PitchTracking.txt").
-	// local trackLine is "cnsLrp: " + cnsLrp + " | cnsSrp: " + cnsSrp + " | SHIP:mass: " + SHIP:mass.
-	// log trackline to "PitchTracking.txt".
 }
 
 function write_screen_see { // Write dynamic display elements and write telemetry to logfile
 	parameter phase.
 	parameter writelog.
-	print phase + "        " at (14, 0).
+	print phase + "        " at (7, 0).
 	// print "----------------------------".
 	print round(SHIP:altitude, 0) + "    " at (14, 2).
 	print round(kpaDynPrs, 2) + "    " at (14, 3).
@@ -521,6 +518,7 @@ until SHIP:altitude < mAltPitch {
 }
 
 // Stage: PITCH BACK
+unlock steering.
 set ag7 to false.
 sas on.
 wait 0.1.
@@ -537,10 +535,10 @@ if SHIP:altitude > mAltUpper {
 
 	local timeFuel is time:seconds + 5.
 	until time:seconds > timeFuel {
-		write_screen_see("Balance fuel", false).
+		write_screen_see("Empty header", false).
 	}
-	until ptRaptorSLA:position:mag > mRapA2COM or rsHDLOX:capacity = rsHDLOX:amount or rsBDLOX:amount = 0 {
-		write_screen_see("Balance fuel", false).
+	until ptRaptorSLA:position:mag > mRapA2COM or round(rsHDLOX:capacity, 0) = round(rsHDLOX:amount, 0) or rsBDLOX:amount = 0 {
+		write_screen_see("Fill header", false).
 		set trnLOXB2H to transfer("lqdOxygen", ptSSBody, ptSSHeader, 57).
 		if (trnLOXB2H:active = false) { set trnLOXB2H:active to true. }
 		set trnCH4B2H to transfer("LqdMethane", ptSSBody, ptSSHeader, 43).
@@ -548,7 +546,7 @@ if SHIP:altitude > mAltUpper {
 		wait 0.1.
 	}
 	until ptRaptorSLA:position:mag > mRapA2COM or rsBDLOX:amount = 0 {
-		write_screen_see("Balance fuel", false).
+		write_screen_see("Fill command", false).
 		set trnLOXB2H to transfer("lqdOxygen", ptSSBody, ptSSCommand, 57).
 		if (trnLOXB2H:active = false) { set trnLOXB2H:active to true. }
 		set trnCH4B2H to transfer("LqdMethane", ptSSBody, ptSSCommand, 43).

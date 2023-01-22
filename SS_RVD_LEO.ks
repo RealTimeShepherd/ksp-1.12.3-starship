@@ -28,6 +28,8 @@ for targ in targs {
 }
 
 //---------------------------------------------------------------------------------------------------------------------
+// #endregion
+//---------------------------------------------------------------------------------------------------------------------
 // #region GLOBALS
 //---------------------------------------------------------------------------------------------------------------------
 
@@ -145,7 +147,7 @@ lock mDockDltZ to 0. // Z delta - used for docking
 
 function write_console_srl { // Write unchanging display elements and header line of new CSV file
 	clearScreen.
-	print "Phase:        " at (0, 0).
+	print "Phase:" at (0, 0).
 	print "----------------------------" at (0, 1).
 	print "Relative vel:            mps" at (0, 2).
 	print "Relative ang:            deg" at (0, 3).
@@ -170,7 +172,7 @@ function write_console_srl { // Write unchanging display elements and header lin
 function write_screen_srl { // Write dynamic display elements and write telemetry to logfile
 	parameter phase.
 	parameter writelog.
-	print phase + "        " at (14, 0).
+	print phase + "        " at (7, 0).
 	// print "----------------------------".
 	print round(vecSS2Trg:mag, 1) + "    " at (14, 2).
 	print round(degRelTrg, 2) + "    " at (14, 3).

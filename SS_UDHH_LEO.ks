@@ -1,4 +1,3 @@
-
 //---------------------------------------------------------------------------------------------------------------------
 // #region HEADER
 //---------------------------------------------------------------------------------------------------------------------
@@ -188,7 +187,7 @@ lock lProp to rsHDCH4_sul:amount + rsCMCH4_sul:amount + rsBDCH4_sul:amount.
 
 function write_console_sul { // Write unchanging display elements and header line of new CSV file
 	clearScreen.
-	print "Phase:        " at (0, 0).
+	print "Phase:" at (0, 0).
 	print "----------------------------" at (0, 1).
 	print "Altitude:                  m" at (0, 2).
 	print "----------------------------" at (0, 3).
@@ -215,7 +214,7 @@ function write_console_sul { // Write unchanging display elements and header lin
 function write_screen_sul { // Write dynamic display elements and write telemetry to logfile
 	parameter phase.
 	parameter writelog.
-	print phase + "               " at (14, 0).
+	print phase + "               " at (7, 0).
 	// print "----------------------------".
 	print round(SHIP:altitude, 0) + "    " at (14, 2).
 	// print "----------------------------".
@@ -391,7 +390,7 @@ wait 1.
 set sasMode to "Retrograde".
 
 until mPad_sul > mMaxDist {
-	write_screen_sul("Waiting: " + round(((mMaxDist - mPad_sul) / 1000), 0) + " km", false).
+	write_screen_sul("Wait for undock: " + round(((mMaxDist - mPad_sul) / 1000), 0) + " km", false).
 }
 
 // Stage: FUEL TRANSFER

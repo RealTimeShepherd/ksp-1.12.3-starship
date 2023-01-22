@@ -20,6 +20,8 @@
 parameter launchTrg.
 
 //---------------------------------------------------------------------------------------------------------------------
+// #endregion
+//---------------------------------------------------------------------------------------------------------------------
 // #region GLOBALS
 //---------------------------------------------------------------------------------------------------------------------
 
@@ -45,7 +47,7 @@ global mAeroGuid is 60000. // Altitude to switch to aerodynamic guidance
 global mPETrg is 200000. // Altitude of target perigee
 global kmVesDst is 1175. // Distance of target vessel to trigger launch (Original 1125)
 global kmIncDst is 0. // Number of additional Km to add per degree of inclination delta (Original 60)
-global degMaxInc is 2.5. // Maximum inclination delta to trigger launch
+global degMaxInc is 5.0. // Maximum inclination delta to trigger launch
 global degOffInc is 70. // Target inclination, this should be timed so precession causes alignment on the desired day
                         // Current reckoning of 7 degrees a day, so set to 70 if you want to align in ten days
 
@@ -177,7 +179,7 @@ lock mpsVrtTrg to 0.
 
 function write_console_ble { // Write unchanging display elements and header line of new CSV file
 	clearScreen.
-	print "Phase:        " at (0, 0).
+	print "Phase:" at (0, 0).
 	print "----------------------------" at (0, 1).
 	print "Altitude:                  m" at (0, 2).
 	print "----------------------------" at (0, 3).
@@ -219,7 +221,7 @@ function write_console_ble { // Write unchanging display elements and header lin
 function write_screen_ble { // Write dynamic display elements and write telemetry to logfile
 	parameter phase.
 	parameter writelog.
-	print phase + "            " at (14, 0).
+	print phase + "            " at (7, 0).
 	// print "----------------------------".
 	print round(SHIP:altitude, 0) + "    " at (14, 2).
 	// print "----------------------------".

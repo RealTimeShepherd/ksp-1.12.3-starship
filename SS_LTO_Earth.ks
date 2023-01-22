@@ -23,6 +23,8 @@
 parameter useCam.
 
 //---------------------------------------------------------------------------------------------------------------------
+// #endregion
+//---------------------------------------------------------------------------------------------------------------------
 // #region GLOBALS
 //---------------------------------------------------------------------------------------------------------------------
 
@@ -166,7 +168,7 @@ if defined rsCMCH4 {
 
 function write_console_sle { // Write unchanging display elements and header line of new CSV file
 	clearScreen.
-	print "Phase:        " at (0, 0).
+	print "Phase:" at (0, 0).
 	print "----------------------------" at (0, 1).
 	print "Altitude:                  m" at (0, 2).
 	print "Apogee:                    m" at (0, 3).
@@ -214,7 +216,7 @@ function write_console_sle { // Write unchanging display elements and header lin
 function write_screen_sle { // Write dynamic display elements and write telemetry to logfile
 	parameter phase.
 	parameter writelog.
-	print phase + "        " at (14, 0).
+	print phase + "        " at (7, 0).
 	// print "----------------------------".
 	print round(SHIP:altitude, 0) + "    " at (14, 2).
 	print round(SHIP:orbit:apoapsis, 0) + "    " at (14, 3).
@@ -419,10 +421,14 @@ write_console_sle().
 // #region FLIGHT
 //---------------------------------------------------------------------------------------------------------------------
 
-if target_is_body(target) {
-	lock degTarDlt to abs(abs(SHIP:orbit:lan - target:orbit:lan) - degOffInc).
+if hastarget {
+	if target_is_body(target) {
+		lock degTarDlt to abs(abs(SHIP:orbit:lan - target:orbit:lan) - degOffInc).
+	} else {
+		lock degTarDlt to abs(SHIP:orbit:lan - target:orbit:lan).
+	}
 } else {
-	lock degTarDlt to abs(SHIP:orbit:lan - target:orbit:lan).
+	lock degTarDlt to 0.
 }
 
 if SHIP:status = "PRELAUNCH" {
@@ -519,7 +525,7 @@ for ptRaptorVac in arrRaptorVac_sle { ptRaptorVac:activate. }
 lock throttle to 1.
 rcs on.
 
-until (SHIP:orbit:apoapsis + SHIP:orbit:periapsis) > (SHIP:altitude * 1.99) {
+until (SHIP:orbit:apoapsis + SHIP:orbit:periapsis) > (mAPTrg * 1.99) {
 	write_screen_sle("Circularising", true).
 }
 

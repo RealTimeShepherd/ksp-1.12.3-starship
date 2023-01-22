@@ -37,23 +37,27 @@ global arrSolarPanels_sle is list().
 global arrSPModules_sle is list().
 
 // Set target orbit values
-global mAPTrg is 500000. // Target apogee
+global mAPTrg is 511000. // Target apogee (it is assumed that variance in the gravitational field will affect this)
 global mPETrg is 200000. // Target perigee
-global mpsExhVel is 3231. // Raptor engines exhaust velocity (Calculated from in-game telemetry)
-global tpsMLRate is 3.4. // Mass in tons lost per second of all 6 raptor engines firing (From in-game telemetry)
 global cnsGME is 3.986e+14. // Earth's gravitational constant
 global mEarthR is 6375000. // Radius of Earth (m)
 global mAPRad is mAPTrg + mEarthR.
 global mPERad is mPETrg + mEarthR.
 global mpsHrzTrg is sqrt(2 * cnsGME * mAPRad / (mPERad * (mAPRad + mPERad))). // Target velocity at perigee
 
+// Engine performance values (Calculated from in-game telemetry)
+global mpsExhVel is 3231. // Raptor engines exhaust velocity
+global tpsMLRate is 3.4. // Mass in tons lost per second of all 6 raptor engines firing
+
 global mpsVrtTrg is 0. // Vertical speed target
 global sToTrgVel is 0. // Seconds to target velocity
 global sToZoVrDl is 0. // Seconds to zero vertical speed delta
-global sToOrbIns is 10.
+global sToOrbIns is 10. // Achieve target vspeed delta of zero this many seconds before orbital insertion
 
 global degPitTrg is 10.
 global degYawTrg is 0.
+global degOffInc is 70. // Target inclination, this should be timed so precession causes alignment on the desired day
+                        // Current reckoning of 7 degrees a day, so set to 70 if you want to align in ten days
 
 // PID controller
 global pidYaw is pidLoop(0.5, 0.001, 0.001, -1, 1).
@@ -143,11 +147,6 @@ for ptSolarPanel in arrSolarPanels_sle {
 // #region LOCKS
 //---------------------------------------------------------------------------------------------------------------------
 
-if hasTarget {
-	lock degTarDlt to SHIP:orbit:lan - target:orbit:lan.
-}	else {
-	lock degTarDlt to 0.
-}
 lock degPitAct to get_pit(prograde).
 lock degYawAct to get_yaw(prograde).
 lock mpsVrtDlt to SHIP:verticalspeed - mpsVrtTrg. // Delta between target vertical speed and actual vertical speed
@@ -327,6 +326,15 @@ function calculate_pitch { // Adjust pitch by increments depending upon when ver
 	}
 }
 
+function target_is_body { // Is parameter a valid target
+	parameter testTrg.
+	list bodies in bodylist.
+	for trg in bodylist {
+		if trg:name = testTrg { return true. }
+	}
+	return false.
+}
+
 function target_is_vessel { // Is parameter a valid target
 	parameter testTrg.
 	list targets in targetlist.
@@ -408,6 +416,12 @@ write_console_sle().
 //---------------------------------------------------------------------------------------------------------------------
 // #region FLIGHT
 //---------------------------------------------------------------------------------------------------------------------
+
+if target_is_body(target) {
+	lock degTarDlt to abs(abs(SHIP:orbit:lan - target:orbit:lan) - degOffInc).
+} else {
+	lock degTarDlt to abs(SHIP:orbit:lan - target:orbit:lan).
+}
 
 if SHIP:status = "PRELAUNCH" {
 
@@ -503,7 +517,7 @@ for ptRaptorVac in arrRaptorVac_sle { ptRaptorVac:activate. }
 lock throttle to 1.
 rcs on.
 
-until (SHIP:orbit:apoapsis + SHIP:orbit:periapsis) > (mAPTrg * 1.99) {
+until (SHIP:orbit:apoapsis + SHIP:orbit:periapsis) > (SHIP:altitude * 1.99) {
 	write_screen_sle("Circularising", true).
 }
 
@@ -521,6 +535,22 @@ sas off.
 
 if target_is_vessel(target:name) {
 	runPath("SS_RVD_LEO.ks", target:name).
+} else {
+
+	// Stage: Orient for coast
+	lock steering to lookDirUp(prograde:vector, up:vector).
+
+	rcs on.
+	set timOrient to time:seconds + 10.
+	until time:seconds > timOrient {
+		write_screen_sle("Orient for coast", true).
+	}
+	unlock steering.
+	rcs off.
+	sas on.
+	wait 0.2.
+	set sasMode to "Prograde".
+
 }
 
 //---------------------------------------------------------------------------------------------------------------------

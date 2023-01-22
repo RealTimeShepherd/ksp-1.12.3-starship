@@ -263,7 +263,7 @@ if dockTrg:distance > mDistRndv {
 		lock steering to lookDirUp(prograde:vector, up:vector).
 		lock vecOrbVel to vxcl(up:vector, SHIP:retrograde:vector).
 	}
-	
+
 	rcs on.
 	local timOrient is time:seconds + 30.
 	until time:seconds > timOrient or vAng(vecOrbTrg, vecOrbVel) < 0.5 or dockTrg:distance < mDistRndv {

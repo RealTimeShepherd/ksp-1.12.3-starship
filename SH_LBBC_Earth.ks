@@ -43,9 +43,11 @@ global pctMinProp is 18. // Percent of propellant remaining to trigger MECO & st
 global mAeroGuid is 60000. // Altitude to switch to aerodynamic guidance
 
 global mPETrg is 200000. // Altitude of target perigee
-global kmVesDst is 1125. // Distance of target vessel to trigger launch
-global kmIncDst is 60. // Number of additional Km to add per degree of inclination delta
-global degMaxInc is 2. // Maximum inclination delta to trigger launch
+global kmVesDst is 1175. // Distance of target vessel to trigger launch (Original 1125)
+global kmIncDst is 0. // Number of additional Km to add per degree of inclination delta (Original 60)
+global degMaxInc is 2.5. // Maximum inclination delta to trigger launch
+global degOffInc is 70. // Target inclination, this should be timed so precession causes alignment on the desired day
+                        // Current reckoning of 7 degrees a day, so set to 70 if you want to align in ten days
 
 global mOvrSht is 2000. // Overshoot targeting of tower in metres
 global mLdgBrn is 35000. // Altitude to start landing burn
@@ -217,7 +219,7 @@ function write_console_ble { // Write unchanging display elements and header lin
 function write_screen_ble { // Write dynamic display elements and write telemetry to logfile
 	parameter phase.
 	parameter writelog.
-	print phase + "               " at (14, 0).
+	print phase + "            " at (14, 0).
 	// print "----------------------------".
 	print round(SHIP:altitude, 0) + "    " at (14, 2).
 	// print "----------------------------".
@@ -356,17 +358,22 @@ write_console_ble().
 if SHIP:status = "PRELAUNCH" {
 
 	// Stage: PRE-LAUNCH
-	lock degTrgInc to abs(SHIP:orbit:lan - target:orbit:lan).
 	if target_is_body(launchTrg) {
+		lock degTrgInc to abs(abs(SHIP:orbit:lan - target:orbit:lan) - degOffInc).
 		set target to launchTrg.
 		until degTrgInc < 0.3 {
 			write_screen_ble("Pre-launch: - " + round(degTrgInc, 4), false).
 		}
 	}
 	if target_is_vessel(launchTrg) { // Launch to circularise as close to target vessel as possible
+		lock degTrgInc to abs(SHIP:orbit:lan - target:orbit:lan).
 		set target to launchTrg.
 		until (target:distance / 1000) < (kmVesDst + (kmIncDst * degTrgInc)) and degTrgInc < degMaxInc {
-			write_screen_ble("D:" + round((target:distance / 1000), 0) + "|I:" + round(degTrgInc, 2), false).
+			if (degTrgInc < degMaxInc) {
+				write_screen_ble("D:" + round(((target:distance / 1000) - (kmVesDst + (kmIncDst * degTrgInc))), 0) + "|I:" + round(degTrgInc, 2), false).
+			} else {
+				write_screen_ble("Over " + degMaxInc + "|I:" + round(degTrgInc, 2), false).
+			}
 		}
 	}
 

@@ -64,11 +64,12 @@ global degPitTrg is 0.
 global degYawTrg is 0.
 
 // Stage thresholds
+global mAltPitch is 250000. // Switch SAS mode to slowly pitch back at this altitude
 global mAltOuter is 140000.
 global mAltUpper is 100000.
-global mAltThermo is 85000.
+global mAltTherm is 88000.
 global kpaMeso is 0.5.
-global mAltStrt is 50000.
+global mAltStrat is 50000.
 global mpsTrop is 1600.
 
 // PID controller values
@@ -466,8 +467,11 @@ set SHIP:control:roll to 0.
 // Switch off RCS
 rcs off.
 
-// Switch on SAS
-sas on.
+// Switch off SAS
+sas off.
+
+// Unlock steering
+unlock steering.
 
 // Enable all fuel tanks
 if defined rsHDLOX { set rsHDLOX:enabled to true. }
@@ -508,9 +512,22 @@ write_console_see().
 // #region FLIGHT
 //---------------------------------------------------------------------------------------------------------------------
 
-// Stage: DESCEND
+// Stage: COAST TO ENTRY
+set navMode to "Surface".
+lock steering to lookDirUp(prograde:vector, up:vector).
+
+until SHIP:altitude < mAltPitch {
+	write_screen_see("Coast to entry", false).
+}
+
+// Stage: PITCH BACK
+set ag7 to false.
+sas on.
+wait 0.1.
+set sasMode to "Stability".
+
 until SHIP:altitude < mAltOuter {
-	write_screen_see("Descend", false).
+	write_screen_see("Pitch back", false).
 }
 
 if SHIP:altitude > mAltUpper {
@@ -541,7 +558,7 @@ if SHIP:altitude > mAltUpper {
 }
 
 // Stage: UPPER ATMOSPHERE
-until SHIP:altitude < mAltThermo {
+until SHIP:altitude < mAltTherm {
 	write_screen_see("Upper atmos.", false).
 }
 
@@ -572,7 +589,7 @@ set pidPit to pidLoop(arrPitMeso[0], arrPitMeso[1], arrPitMeso[2]).
 set pidYaw to pidLoop(arrYawMeso[0], arrYawMeso[1], arrYawMeso[2]).
 set pidRol to pidLoop(arrRolMeso[0], arrRolMeso[1], arrRolMeso[2]).
 
-until SHIP:altitude < mAltStrt {
+until SHIP:altitude < mAltStrat {
 	write_screen_see("Mesosphere (Flaps)", true).
 	set degPitTrg to calculate_lrp().
 	set degYawTrg to kpaDynPrs * (0 - degBerPad).

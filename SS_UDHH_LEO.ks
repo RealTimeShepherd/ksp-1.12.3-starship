@@ -31,6 +31,9 @@ parameter useCam.
 // Logfile
 global log_sul is "Telemetry/ss_udhh_leo_log.csv".
 
+// Up/down direction is random with two craft docked
+global boolSSUp is true.
+
 // Define Boca Chica catch tower - long term get this from target info
 global pad_sul is latlng(25.9669968, -97.1416771). // Tower Catch point - BC OLIT 1
 
@@ -46,8 +49,6 @@ global lTopUp is 25000.
 // Event triggers
 global mMaxDist is 13000000. // Script start when pad is over this distance away
 global mTrgPE is 90000. // Lower Periapsis to this altitude
-global mPitBak is 250000. // Switch SAS mode to slowly pitch back at this altitude
-global mAltEDL is 140000. // Outer bounds of atmosphere - launch EDL script
 
 global arrSSFlaps_sul is list().
 global arrRaptorVac0 is list().
@@ -93,6 +94,7 @@ if ptSSBody0:name = "SEP.S20.BODY.NHS" { // 0 is Depot - 1 is StarShip
 	set ptSSBody_sul to ptSSBody1.
 	set arrRaptorVac_sul to arrRaptorVac1.
 	set arrRaptorSL_sul to arrRaptorSL1.
+	set boolSSUp to false.
 } else { // 1 is Depot - 0 is StarShip
 	set ptDPHeader to ptSSHeader1.
 	set ptDPCommand to ptSSCommand1.
@@ -102,6 +104,7 @@ if ptSSBody0:name = "SEP.S20.BODY.NHS" { // 0 is Depot - 1 is StarShip
 	set ptSSBody_sul to ptSSBody0.
 	set arrRaptorVac_sul to arrRaptorVac0.
 	set arrRaptorSL_sul to arrRaptorSL0.
+	set boolSSUp to true.
 }
 
 // Bind to resources within StarShip Tanker Header
@@ -124,7 +127,6 @@ if defined ptDPHeader {
 
 // Bind to modules & resources within StarShip Tanker Command
 if defined ptSSCommand_sul {
-	set mdSSCMCmd to ptSSCommand_sul:getmodule("ModuleCommand").
 	set mdSSCMRCS to ptSSCommand_sul:getmodule("ModuleRCSFX").
 	// Bind to command tanks
 	for rsc in ptSSCommand_sul:resources {
@@ -345,6 +347,20 @@ if useCam {
 	set cam:distance to 100.
 }
 
+// if useCam {
+// 	// Camera settings
+// 	global cam is addons:camera:flightcamera.
+// 	set cam:target to ptSSBody_sul.
+// 	wait 1.
+// 	set cam:mode to "free".
+// 	wait 1.
+// 	set cam:pitch to 0.
+// 	wait 1.
+// 	set cam:heading to -170.
+// 	wait 1.
+// 	set cam:distance to 80.
+// }
+
 write_console_sul().
 
 //---------------------------------------------------------------------------------------------------------------------
@@ -356,7 +372,11 @@ write_console_sul().
 if vAng(SHIP:facing:vector, retrograde:vector) > 2 {
 	// STAGE: ORIENT FOR UNDOCK
 	rcs on.
-	lock steering to lookDirUp(retrograde:vector, up:vector).
+	if boolSSUp {
+		lock steering to lookDirUp(retrograde:vector, up:vector).
+	} else {
+		lock steering to lookDirUp(retrograde:vector, -up:vector).
+	}
 	local timOrient is time:seconds + 30.
 	until time:seconds > timOrient {
 		write_screen_sul("Orient for undock", true).
@@ -390,6 +410,9 @@ if mdDPBDDock:hasevent("undock") {
 } else {
 	mdSSBDDock:doevent("undock").
 }
+if useCam {
+	set cam:mode to "free".
+}
 wait 0.1.
 if kuniverse:activevessel:name <> SHIP:name {
 	set kuniverse:activevessel to SHIP.
@@ -402,6 +425,13 @@ local timeFire is time:seconds + 2.
 
 until time:seconds > timeFire {
 	write_screen_sul("Undock", true).
+	if useCam {
+		set cam:target to ptSSBody_sul.
+		wait 0.1.
+		set cam:heading to 0.
+		wait 0.1.
+		set cam:pitch to 90.
+	}
 }
 
 // Stage: BACKOFF
@@ -431,24 +461,6 @@ until time:seconds > timOrient {
 	write_screen_sul("Orient for coast", true).
 }
 
-// Stage: COAST TO ENTRY
-unlock steering.
-rcs off.
-sas on.
-wait 0.2.
-set sasMode to "Prograde".
-
-until SHIP:altitude < mPitBak {
-	write_screen_sul("Coast to entry", true).
-}
-
-// Stage: PITCH BACK
-set sasMode to "Stability".
-
-until SHIP:altitude < mAltEDL {
-	write_screen_sul("Coast to entry", true).
-}
-
 // Stage: EDL
-set ag7 to false.
+set ag8 to false.
 runPath("SS_EDL_Earth.ks").

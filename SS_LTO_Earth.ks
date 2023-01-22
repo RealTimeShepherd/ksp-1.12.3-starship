@@ -56,6 +56,8 @@ global sToOrbIns is 10. // Achieve target vspeed delta of zero this many seconds
 
 // Target inclination, this should be timed so precession causes alignment on the desired day
 global degOffInc is 70. // Current reckoning of 7 degrees a day, so set to 70 if you want to align in ten days
+
+// Pitch and Yaw targets
 global degPitTrg is 10.
 global degYawTrg is 0.
 

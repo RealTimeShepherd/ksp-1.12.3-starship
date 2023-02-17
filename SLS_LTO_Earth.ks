@@ -2,15 +2,13 @@
 // #region HEADER
 //---------------------------------------------------------------------------------------------------------------------
 
-// Title:       SS_LTO_Earth
-// Translation: StarShip - Launch to orbit - Earth
-// Description: This script deals with taking the StarShip to low Earth orbit (LEO) through the following stages
-// On booster:  Wait for the SuperHeavy booster to lift the StarShip up to about 50Km altitude and 2km/s speed
-// Ascent:      Full throttle with all 6 engines, controlling the pitch to guide the vehicle into an eccentric orbit
+// Title:       SLS_LTO_Earth
+// Translation: Space Launch System (NASA) - Launch to orbit - Earth
+// Description: This script deals with taking the SLS to low Earth orbit (LEO) through the following stages
+// Stage 1:     Lift off with 2 SRBs at max and 4 RS-25s at nearly full throttle
+// Stage 2:     Full throttle with 4 remaining RS-25s, controlling the pitch to guide the vehicle into an eccentric orbit
 // Coast to AP: Wait half an orbit to climb to the maximum altitude
-// Circularise: Circularise the orbit at AP
-// Rendezvous:  If the SH_LBBC_Earth script controlling the SuperHeavy Booster targeted a vehicle at launch, this script
-//                  will launch a follow on script SS_RVD_LEO to conduct rendezvous and docking manoeuvres
+// PRM:         Perigee raise manouvere
 
 // Parameters:  useCam - if specified, the camera commands will be run (For recording videos)
 
@@ -20,7 +18,7 @@
 // #region PARAMETERS
 //---------------------------------------------------------------------------------------------------------------------
 
-parameter useCam.
+parameter launchTrg.
 
 //---------------------------------------------------------------------------------------------------------------------
 // #endregion
@@ -29,14 +27,17 @@ parameter useCam.
 //---------------------------------------------------------------------------------------------------------------------
 
 // Logfile
-global log_sle is "Telemetry/ss_lto_earth_log.csv".
+global log_lle is "Telemetry/sls_lto_earth_log.csv".
+
+// Launch variables
+global mGravTurn is 500. // Altitude to start gravity turn
+global kNThrLaunch is 7400. // Kn Thrust to trigger launch clamp release
 
 // Arrays for flaps and engines
-global arrSSFlaps_sle is list().
-global arrRaptorVac_sle is list().
-global arrRaptorSL_sle is list().
-global arrSolarPanels_sle is list().
-global arrSPModules_sle is list().
+global arrRS25s is list().
+global arrSRBs is list().
+global arrNoseCones is list().
+global arrRS25Mds is list().
 
 // Set target orbit values
 global mAPTrg is 511000. // Target apogee (it is assumed that variance in the gravitational field will affect this)
@@ -48,8 +49,8 @@ global mPERad is mPETrg + mEarthR.
 global mpsHrzTrg is sqrt(2 * cnsGME * mAPRad / (mPERad * (mAPRad + mPERad))). // Target velocity at perigee
 
 // Engine performance values (Calculated from in-game telemetry)
-global mpsExhVel is 3231. // Raptor engines exhaust velocity
-global tpsMLRate is 3.4. // Mass in tons lost per second of all 6 raptor engines firing
+global mpsExhVel is 3231. // RS-25 engines exhaust velocity
+global tpsMLRate is 3.4. // Mass in tons lost per second of all 4 RS-25 engines firing
 
 global mpsVrtTrg is 0. // Vertical speed target
 global sToTrgVel is 0. // Seconds to target velocity
@@ -70,8 +71,6 @@ set pidYaw:setpoint to 0.
 global trkStpTim is list(0, 0, 0, 0, 0). // Track time per step
 global trkVrtDlt is list(0, 0, 0, 0, 0). // Track vertical speed delta per step
 
-global onBooster is true.
-
 //---------------------------------------------------------------------------------------------------------------------
 // #endregion
 //---------------------------------------------------------------------------------------------------------------------
@@ -80,69 +79,42 @@ global onBooster is true.
 
 // Bind to ship parts
 for pt in SHIP:parts {
-	if pt:name:startswith("SEP.S20.HEADER") { set ptSSHeader to pt. }
-	if pt:name:startswith("SEP.S20.CREW") { set ptSSCommand to pt. }
-	if pt:name:startswith("SEP.S20.TANKER") { set ptSSCommand to pt. }
-	if pt:name:startswith("SEP.S20.BODY") { set ptSSBody to pt. }
-	if pt:name:startswith("SEP.S20.FWD.LEFT") { set ptFlapFL to pt. }
-	if pt:name:startswith("SEP.S20.FWD.RIGHT") { set ptFlapFR to pt. }
-	if pt:name:startswith("SEP.S20.AFT.LEFT") { set ptFlapAL to pt. }
-	if pt:name:startswith("SEP.S20.AFT.RIGHT") { set ptFlapAR to pt. }
-	if pt:name:startswith("SEP.RAPTOR.VAC") { arrRaptorVac_sle:add(pt). }
-	if pt:name:startswith("SEP.RAPTOR.SL") { arrRaptorSL_sle:add(pt). }
-	if pt:name:startswith("nfs-panel-deploying-blanket-arm-1") { arrSolarPanels_sle:add(pt). }
+	if pt:name:startswith("AM.MLP.SaturnTowerSwingArmGen") { set ptOrionSwing to pt. }
+	if pt:name:startswith("AM.MLP.SaturnTowerCrewArm") { set ptOrionCrew to pt. }
+	if pt:name:startswith("AM.MLP.SaturnTowerSwingArm0") { set ptSLSSwing to pt. }
+	if pt:name:startswith("AM.MLP.SaturnMobileLauncherClampBase") { set ptLauncher to pt. }
+	if pt:name:startswith("benjee10.SLS.coreStage") { set ptCore to pt. }
+	if pt:name:startswith("PC.5Seg.RSRM") { arrSRBs:add(pt). }
+	if pt:name:startswith("PC.Nose") { arrNoseCones:add(pt). }
+	if pt:name:startswith("rmm.cotopaxi") { arrRS25s:add(pt). }
 }
 
-// Bind to resources within StarShip Header
-if defined ptSSHeader {
-	// Bind to header tanks
-	for rsc in ptSSHeader:resources {
-		if rsc:name = "LqdOxygen" { set rsHDLOX to rsc. }
-		if rsc:name = "LqdMethane" { set rsHDCH4 to rsc. }
+// Bind to Swing Arm modules
+if defined ptOrionSwing {
+	set mdOrionSwing to ptOrionSwing:getmodulebyindex(4).
+}
+if defined ptOrionCrew {
+	set mdOrionCrew to ptOrionCrew:getmodule("ModuleAnimateGenericExtra").
+}
+if defined ptSLSSwing {
+	set mdSLSSwing to ptSLSSwing:getmodule("ModuleAnimateGenericExtra").
+}
+
+// Bind to Launch clamp
+if defined ptLauncher {
+	set mdLaunchClamp to ptLauncher:getmodule("LaunchClamp").
+}
+
+for ptRS25 in arrRS25s {
+	arrRS25Mds:add(ptRS25:getmodule("ModuleEnginesRF")).
+}
+
+// Bind to resources within SLS core stage
+if defined ptCore {
+	for rsc in ptCore:resources {
+		if rsc:name = "LqdOxygen" { set rsCoreLOX to rsc. }
+		if rsc:name = "LqdHydrogen" { set rsCoreLH2 to rsc. }
 	}
-}
-
-// Bind to modules & resources within StarShip Command
-if defined ptSSCommand {
-	set mdSSCMRCS to ptSSCommand:getmodule("ModuleRCSFX").
-	// Bind to command tanks
-	for rsc in ptSSCommand:resources {
-		if rsc:name = "LqdOxygen" { set rsCMLOX to rsc. }
-		if rsc:name = "LqdMethane" { set rsCMCH4 to rsc. }
-	}
-}
-
-// Bind to modules & resources within StarShip Body
-if defined ptSSBody {
-	set mdSSBDRCS to ptSSBody:getmodule("ModuleRCSFX").
-	// Bind to command tanks
-	for rsc in ptSSBody:resources {
-		if rsc:name = "LqdOxygen" { set rsBDLOX to rsc. }
-		if rsc:name = "LqdMethane" { set rsBDCH4 to rsc. }
-	}
-}
-
-// Bind to modules within StarShip Flaps
-if defined ptFlapFL {
-	set mdFlapFLCS to ptFlapFL:getmodule("ModuleSEPControlSurface").
-	arrSSFlaps_sle:add(mdFlapFLCS).
-}
-if defined ptFlapFR {
-	set mdFlapFRCS to ptFlapFR:getmodule("ModuleSEPControlSurface").
-	arrSSFlaps_sle:add(mdFlapFRCS).
-}
-if defined ptFlapAL {
-	set mdFlapALCS to ptFlapAL:getmodule("ModuleSEPControlSurface").
-	arrSSFlaps_sle:add(mdFlapALCS).
-}
-if defined ptFlapAR {
-	set mdFlapARCS to ptFlapAR:getmodule("ModuleSEPControlSurface").
-	arrSSFlaps_sle:add(mdFlapARCS).
-}
-
-// Bind to modules within solar panels
-for ptSolarPanel in arrSolarPanels_sle {
-	arrSPModules_sle:add(ptSolarPanel:getmodule("ModuleDeployableSolarPanel")).
 }
 
 //---------------------------------------------------------------------------------------------------------------------
@@ -154,11 +126,8 @@ for ptSolarPanel in arrSolarPanels_sle {
 lock degPitAct to get_pit(prograde).
 lock degYawAct to get_yaw(prograde).
 lock mpsVrtDlt to SHIP:verticalspeed - mpsVrtTrg. // Delta between target vertical speed and actual vertical speed
-if defined rsCMCH4 {
-	lock klProp to rsHDCH4:amount + rsCMCH4:amount + rsBDCH4:amount.
-} else {
-	lock klProp to rsHDCH4:amount + rsBDCH4:amount.
-}
+lock kNThrust to arrRS25Mds[0]:getfield("thrust") + arrRS25Mds[1]:getfield("thrust") + arrRS25Mds[2]:getfield("thrust") + arrRS25Mds[3]:getfield("thrust").
+lock klProp to rsCoreLH2:amount.
 
 //---------------------------------------------------------------------------------------------------------------------
 // #endregion
@@ -166,7 +135,7 @@ if defined rsCMCH4 {
 // #region FUNCTIONS
 //---------------------------------------------------------------------------------------------------------------------
 
-function write_console_sle { // Write unchanging display elements and header line of new CSV file
+function write_console_lle { // Write unchanging display elements and header line of new CSV file
 	clearScreen.
 	print "Phase:" at (0, 0).
 	print "----------------------------" at (0, 1).
@@ -191,7 +160,7 @@ function write_console_sle { // Write unchanging display elements and header lin
 	print "Propellant:                l" at (0, 20).
 	print "Throttle:                  %" at (0, 21).
 
-	deletePath(log_sle).
+	deletePath(log_lle).
 	local logline is "MET,".
 	set logline to logline + "Phase,".
 	set logline to logline + "Altitude,".
@@ -210,10 +179,10 @@ function write_console_sle { // Write unchanging display elements and header lin
 	set logline to logline + "Ship mass,".
 	set logline to logline + "Propellant,".
 	set logline to logline + "Throttle,".
-	log logline to log_sle.
+	log logline to log_lle.
 }
 
-function write_screen_sle { // Write dynamic display elements and write telemetry to logfile
+function write_screen_lle { // Write dynamic display elements and write telemetry to logfile
 	parameter phase.
 	parameter writelog.
 	print phase + "        " at (7, 0).
@@ -231,7 +200,7 @@ function write_screen_sle { // Write dynamic display elements and write telemetr
 	print round(degPitAct, 2) + "    " at (14, 12).
 	print round(sToTrgVel, 2) + "    " at (14, 13).
 	// print "----------------------------".
-	print round(degTarDlt, 4) + "    " at (14, 15).
+	print round(degTrgInc, 4) + "    " at (14, 15).
 	print round(degYawTrg, 2) + "    " at (14, 16).
 	print round(degYawAct, 2) + "    " at (14, 17).
 	// print "----------------------------".
@@ -252,13 +221,13 @@ function write_screen_sle { // Write dynamic display elements and write telemetr
 		set logline to logline + round(degPitTrg, 2) + ",".
 		set logline to logline + round(degPitAct, 2) + ",".
 		set logline to logline + round(sToTrgVel, 2) + ",".
-		set logline to logline + round(degTarDlt, 4) + ",".
+		set logline to logline + round(degTrgInc, 4) + ",".
 		set logline to logline + round(degYawTrg, 2) + ",".
 		set logline to logline + round(degYawAct, 2) + ",".
 		set logline to logline + round(SHIP:mass, 2) + ",".
 		set logline to logline + round(klProp, 0) + ",".
 		set logline to logline + round(throttle * 100, 2) + ",".
-		log logline to log_sle.
+		log logline to log_lle.
 	}
 }
 
@@ -354,12 +323,7 @@ function target_is_vessel { // Is parameter a valid target
 // #region INITIALISE
 //---------------------------------------------------------------------------------------------------------------------
 
-// Retract Solar Panels
-for mdSP in arrSPModules_sle { mdSP:doaction("retract solar panel", true). }
-
 // Enable RCS modules
-mdSSCMRCS:setfield("rcs", true).
-mdSSBDRCS:setfield("rcs", true).
 
 // Nullify RCS control values
 set SHIP:control:pitch to 0.
@@ -370,50 +334,16 @@ set SHIP:control:roll to 0.
 rcs off.
 sas off.
 
-// Enable main fuel tanks - disable header tanks
-if defined rsHDLOX { set rsHDLOX:enabled to false. }
-if defined rsHDCH4 { set rsHDCH4:enabled to false. }
-if defined rsCMLOX { set rsCMLOX:enabled to true. }
-if defined rsCMCH4 { set rsCMCH4:enabled to true. }
-if defined rsBDLOX { set rsBDLOX:enabled to true. }
-if defined rsBDCH4 { set rsBDCH4:enabled to true. }
-
 // Kill throttle
 lock throttle to 0.
 
-// Shut down sea level Raptors
-for ptRaptorSL in arrRaptorSL_sle { ptRaptorSL:shutdown. }
+// Shut down RS-25s
+for ptRS25 in arrRS25s { ptRS25:shutdown. }
 
-// Shut down vacuum Raptors
-for ptRaptorVac in arrRaptorVac_sle { ptRaptorVac:shutdown. }
+// Retract Crew arm
+if mdOrionCrew:hasevent("retract arm") { mdOrionCrew:doevent("retract arm"). }
 
-// Set flaps to launch position
-for mdSSFlap in arrSSFlaps_sle {
-	// Disable manual control
-	mdSSFlap:setfield("pitch", true).
-	mdSSFlap:setfield("yaw", true).
-	mdSSFlap:setfield("roll", true).
-	// Set starting angles
-	mdSSFlap:setfield("deploy angle", 0).
-	// deploy control surfaces
-	mdSSFlap:setfield("deploy", true).
-}
-
-if useCam {
-	// Camera settings
-	global cam is addons:camera:flightcamera.
-	set cam:target to ptSSBody.
-	wait 1.
-	set cam:mode to "free".
-	wait 1.
-	set cam:heading to 0.
-	wait 1.
-	set cam:pitch to 90.
-	wait 1.
-	set cam:distance to 100.
-}
-
-write_console_sle().
+write_console_lle().
 
 //---------------------------------------------------------------------------------------------------------------------
 // #endregion
@@ -421,63 +351,71 @@ write_console_sle().
 // #region FLIGHT
 //---------------------------------------------------------------------------------------------------------------------
 
-if hastarget {
-	if target_is_body(target) {
-		lock degTarDlt to abs(abs(SHIP:orbit:lan - target:orbit:lan) - degOffInc).
-	} else {
-		lock degTarDlt to abs(SHIP:orbit:lan - target:orbit:lan).
-	}
-} else {
-	lock degTarDlt to 0.
-}
-
-if SHIP:status = "PRELAUNCH" {
+if SHIP:status <> "PRELAUNCH" {
 
 	// Stage: PRE-LAUNCH
-	until SHIP:verticalspeed > 0.1 {
-		write_screen_sle("Pre-launch", false).
-	}
-
-	if target_is_vessel(target) {
-		lock degTarDlt to SHIP:orbit:lan - target:orbit:lan.
-	}
-
-	// Stage: ON BOOSTER
-	until onBooster = false {
-		write_screen_sle("On Booster", true).
-		set onBooster to false.
-		for pt in SHIP:parts {
-			if pt:name:startswith("SEP.B4.INTER") { set onBooster to true. }
+	if target_is_body(launchTrg) {
+		lock degTrgInc to abs(abs(SHIP:orbit:lan - target:orbit:lan) - degOffInc).
+		set target to launchTrg.
+		until degTrgInc < 0.3 {
+			write_screen_lle("Pre-launch: - " + round(degTrgInc, 4), false).
 		}
+	} else {
+		lock degTrgInc to 0.
 	}
 
-	// Stage: STAGE
-	for ptRaptorSL in arrRaptorSL_sle { ptRaptorSL:activate. }
-	for ptRaptorVac in arrRaptorVac_sle { ptRaptorVac:activate. }
+	// Stage: IGNITION
 	lock throttle to 1.
-	local timeStage is time:seconds + 4.
+	for ptRS25 in arrRS25s { ptRS25:activate. }
+	if mdOrionSwing:hasevent("retract arm") { mdOrionSwing:doevent("retract arm"). }
+	if mdSLSSwing:hasevent("retract arm") { mdSLSSwing:doevent("retract arm"). }
 
-	until time:seconds > timeStage {
-		write_screen_sle("Stage", true).
+	until kNThrust > kNThrLaunch {
+		write_screen_lle(kNThrust, false).
 	}
 
-	// Stage: ASCENT
+	// Stage: LIFT OFF
+	//lock kNThrust to 
+	lock steering to up.
+	for ptSRB in arrSRBs { ptSRB:activate. }
+	mdLaunchClamp:doevent("release clamp").
+
+	until SHIP:altitude > mGravTurn {
+		write_screen_lle("Lift off", true).
+	}
+
+	// Stage: GRAVITY TURN
+	set degPitTrg to (1 - (sqrt((SHIP:apoapsis - mGravTurn) / mPETrg) * 1.05)) * 90.
+	lock steering to lookDirUp(heading(90 - degYawTrg, degPitTrg):vector, up:vector).
+
+	until false {
+		write_screen_lle("Gravity turn", true).
+		set degYawTrg to pidYaw:update(time:seconds, degTrgInc).
+	}
+
+	// Stage: JETTISON SRBs
+
+	until false {
+		write_screen_lle("Stage", true).
+	}
+
+	// Stage: STAGE 2
 	lock steering to lookDirUp(heading(heading_of_vector(prograde:vector) - degYawTrg, degPitTrg + vang(prograde:vector, vxcl(up:vector, prograde:vector))):vector, up:vector).
 	set mpsVrtTrg to calculate_tvspd().
 
 	until sToTrgVel < sToOrbIns {
-		write_screen_sle("Ascent", true).
+		write_screen_lle("Ascent", true).
 		set mpsVrtTrg to calculate_tvspd().
 		set degPitTrg to calculate_pitch().
-		set degYawTrg to 0 - pidYaw:update(time:seconds, degTarDlt).
+		set degYawTrg to 0 - pidYaw:update(time:seconds, degTrgInc).
 	}
 
 	// Stage: ORBITAL INSERTION
 	until SHIP:orbit:apoapsis > (mAPTrg * 0.9) {
-		write_screen_sle("Orbital insertion", true).
+		write_screen_lle("Orbital insertion", true).
 		set mpsVrtTrg to calculate_tvspd().
 		set degPitTrg to calculate_pitch().
-		set degYawTrg to 0 - pidYaw:update(time:seconds, degTarDlt).
+		set degYawTrg to 0 - pidYaw:update(time:seconds, degTrgInc).
 	}
 
 	// Stage: TRIM
@@ -486,7 +424,7 @@ if SHIP:status = "PRELAUNCH" {
 	lock throttle to 0.4.
 
 	until SHIP:orbit:apoapsis > (mAPTrg * 0.97) {
-		write_screen_sle("Trim        ", true).
+		write_screen_lle("Trim        ", true).
 	}
 
 	lock throttle to 0.
@@ -494,74 +432,65 @@ if SHIP:status = "PRELAUNCH" {
 	set SHIP:control:fore to 1.
 
 	until SHIP:orbit:apoapsis > (mAPTrg * 0.999) {
-		write_screen_sle("Trim", true).
+		write_screen_lle("Trim", true).
 		set SHIP:control:fore to max(1, (mAPTrg - SHIP:orbit:apoapsis) / (mAPTrg * 0.97)).
 	}
 
-}
+	// Stage: COAST TO APOGEE
+	set SHIP:control:fore to 0.
 
-// Stage: COAST TO APOGEE
-set ag7 to true.
-set ag9 to true.
-for ptRaptorSL in arrRaptorSL_sle { ptRaptorSL:shutdown. }
-for ptRaptorVac in arrRaptorVac_sle { ptRaptorVac:shutdown. }
-for mdSP in arrSPModules_sle { mdSP:doaction("extend solar panel", true). }
-set SHIP:control:fore to 0.
-
-lock steering to lookDirUp(prograde:vector, up:vector).
-local timOrient is time:seconds + 30.
-until time:seconds > timOrient {
-	write_screen_sle("Orient for coast", true).
-}
-unlock steering.
-rcs off.
-sas on.
-wait 0.2.
-set sasMode to "Prograde".
-
-until SHIP:orbit:eta:apoapsis < 4 {
-	write_screen_sle("Coast to Apogee", true).
-}
-
-// Stage: CIRCULARISING
-for ptRaptorSL in arrRaptorSL_sle { ptRaptorSL:activate. }
-for ptRaptorVac in arrRaptorVac_sle { ptRaptorVac:activate. }
-lock throttle to 1.
-rcs on.
-
-until (SHIP:orbit:apoapsis + SHIP:orbit:periapsis) > (mAPTrg + SHIP:altitude) {
-	write_screen_sle("Circularising", true).
-}
-
-// Stage: ORBIT ATTAINED
-for ptRaptorSL in arrRaptorSL_sle { ptRaptorSL:shutdown. }
-for ptRaptorVac in arrRaptorVac_sle { ptRaptorVac:shutdown. }
-lock throttle to 0.
-rcs off.
-
-local timeWait is time:seconds + 1.
-until time:seconds > timeWait {
-	write_screen_sle("Orbit attained", true).
-}
-sas off.
-
-if target_is_vessel(target:name) {
-	runPath("SS_RVD_LEO.ks", target:name).
-} else {
-
-	// Stage: Orient for coast
 	lock steering to lookDirUp(prograde:vector, up:vector).
-
-	rcs on.
-	set timOrient to time:seconds + 10.
+	local timOrient is time:seconds + 30.
 	until time:seconds > timOrient {
-		write_screen_sle("Orient for coast", true).
+		write_screen_lle("Orient for coast", true).
 	}
 	unlock steering.
 	rcs off.
 	sas on.
 	wait 0.2.
 	set sasMode to "Prograde".
+
+	until SHIP:orbit:eta:apoapsis < 4 {
+		write_screen_lle("Coast to Apogee", true).
+	}
+
+	// Stage: CIRCULARISING
+	lock throttle to 1.
+	rcs on.
+
+	until (SHIP:orbit:apoapsis + SHIP:orbit:periapsis) > (mAPTrg + SHIP:altitude) {
+		write_screen_lle("Circularising", true).
+	}
+
+	// Stage: ORBIT ATTAINED
+	lock throttle to 0.
+	rcs off.
+
+	local timeWait is time:seconds + 1.
+	until time:seconds > timeWait {
+		write_screen_lle("Orbit attained", true).
+	}
+	sas off.
+
+	if target_is_vessel(target:name) {
+		runPath("SS_RVD_LEO.ks", target:name).
+	} else {
+
+		// Stage: Orient for coast
+		lock steering to lookDirUp(prograde:vector, up:vector).
+
+		rcs on.
+		set timOrient to time:seconds + 10.
+		until time:seconds > timOrient {
+			write_screen_lle("Orient for coast", true).
+		}
+		unlock steering.
+		rcs off.
+		sas on.
+		wait 0.2.
+		set sasMode to "Prograde".
+
+	}
 
 }
 

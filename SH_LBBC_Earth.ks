@@ -43,11 +43,16 @@ global mGravTurn is 500. // Altitude to start gravity turn
 global kNThrLaunch is 68000. // Kn Thrust to trigger launch clamp release
 global pctMinProp is 18. // Percent of propellant remaining to trigger MECO & stage separation
 global mAeroGuid is 60000. // Altitude to switch to aerodynamic guidance
+global degYawTrg is 0.
+
+// PID controller
+global pidYaw is pidLoop(0.5, 0.001, 0.001, -10, 10).
+set pidYaw:setpoint to 0.
 
 global mPETrg is 200000. // Altitude of target perigee
 global kmVesDst is 1175. // Distance of target vessel to trigger launch (Original 1125)
 global kmIncDst is 0. // Number of additional Km to add per degree of inclination delta (Original 60)
-global degMaxInc is 5.0. // Maximum inclination delta to trigger launch
+global degMaxInc is 20. // Maximum inclination delta to trigger launch
 global degOffInc is 70. // Target inclination, this should be timed so precession causes alignment on the desired day
                         // Current reckoning of 7 degrees a day, so set to 70 if you want to align in ten days
 
@@ -356,7 +361,6 @@ write_console_ble().
 // #region FLIGHT
 //---------------------------------------------------------------------------------------------------------------------
 
-
 if SHIP:status = "PRELAUNCH" {
 
 	// Stage: PRE-LAUNCH
@@ -372,15 +376,18 @@ if SHIP:status = "PRELAUNCH" {
 		set target to launchTrg.
 		until (target:distance / 1000) < (kmVesDst + (kmIncDst * degTrgInc)) and degTrgInc < degMaxInc {
 			if (degTrgInc < degMaxInc) {
-				write_screen_ble("D:" + round(((target:distance / 1000) - (kmVesDst + (kmIncDst * degTrgInc))), 0) + "|I:" + round(degTrgInc, 2), false).
+				write_screen_ble("D0: " + round(((target:distance / 1000) - (kmVesDst + (kmIncDst * degTrgInc))), 0) + " | I: " + round(degTrgInc, 2), false).
 			} else {
-				write_screen_ble("Over " + degMaxInc + "|I:" + round(degTrgInc, 2), false).
+				write_screen_ble("Max Inc: " + degMaxInc + " | I: " + round(degTrgInc, 2), false).
 			}
 		}
 	}
 
+	if target_is_vessel(launchTrg) {
+		lock degTrgInc to SHIP:orbit:lan - target:orbit:lan.
+	}
+
 	// Stage: IGNITION
-	unlock degTrgInc.
 	lock throttle to 1.
 	if mdQDSH:hasevent("Open") { mdQDSH:doevent("Open"). }
 	if mdQDSS:hasevent("Open") { mdQDSS:doevent("Open"). }
@@ -399,10 +406,11 @@ if SHIP:status = "PRELAUNCH" {
 
 	// Stage: GRAVITY TURN
 	lock degPitTrg to (1 - (sqrt((SHIP:apoapsis - mGravTurn) / mPETrg) * 1.05)) * 90.
-	lock steering to lookDirUp(heading(90, degPitTrg):vector, up:vector).
+	lock steering to lookDirUp(heading(90 - degYawTrg, degPitTrg):vector, up:vector).
 
 	until pctProp < pctMinProp {
 		write_screen_ble("Gravity turn", true).
+		set degYawTrg to pidYaw:update(time:seconds, degTrgInc).
 	}
 
 	// Stage: STAGE
@@ -414,6 +422,7 @@ if SHIP:status = "PRELAUNCH" {
 	mdCntEngs:doaction("shutdown engine", true).
 	wait 0.1.
 	mdDecouple:doevent("decouple").
+	unlock degTrgInc.
 
 	local timeStage is time:seconds + 4.
 	until time:seconds > timeStage {

@@ -37,7 +37,7 @@ for targ in targs {
 global log_srl is "Telemetry/ss_rvd_leo.csv".
 
 global mDistRapt is 15000. // Distance for using Raptors to intercept
-global mDistRndv is 4000. // Distance for rendezvous
+global mDistRndv is 5000. // Distance for rendezvous
 global mDistDock is 300. // Distance for docking
 
 global vecHldNos is 0. // Vector to hold attitude when docking
@@ -268,7 +268,7 @@ if dockTrg:distance > mDistRndv {
 
 	rcs on.
 	local timOrient is time:seconds + 30.
-	until time:seconds > timOrient or vAng(vecOrbTrg, vecOrbVel) < 0.5 or dockTrg:distance < mDistRndv {
+	until time:seconds > timOrient or vAng(vecOrbTrg, vecOrbVel) < 0.5 or vAng(vecOrbTrg, vecOrbVel) > 179.5 or dockTrg:distance < mDistRndv {
 		write_screen_srl("Orient for coast", true).
 	}
 	unlock steering.
@@ -281,7 +281,7 @@ if dockTrg:distance > mDistRndv {
 		set sasMode to "Prograde".
 	}
 
-	until vAng(vecOrbTrg, vecOrbVel) < 0.5 or dockTrg:distance < mDistRndv {
+	until vAng(vecOrbTrg, vecOrbVel) < 0.5 or vAng(vecOrbTrg, vecOrbVel) > 179.5 or dockTrg:distance < mDistRndv {
 		write_screen_srl("X-over: " + round(vAng(vecOrbTrg, vecOrbVel), 2), true).
 	}
 	sas off.
@@ -453,17 +453,6 @@ until SHIP:mass > tCurMass {
 	set SHIP:control:starboard to pidX:update(time:seconds, mDockDltX).
 	set SHIP:control:fore to pidY:update(time:seconds, mDockDltY).
 	set SHIP:control:top to 0 - pidZ:update(time:seconds, mDockDltZ).
-}
-
-if vAng(SHIP:facing:vector, retrograde:vector) > 2 {
-	// STAGE: ORIENT FOR COAST
-	rcs on.
-	lock steering to lookDirUp(retrograde:vector, up:vector).
-	local timOrient is time:seconds + 60.
-	until time:seconds > timOrient {
-		write_screen_srl("Orient for coast", true).
-	}
-	unlock steering.
 }
 
 // Stage: COAST

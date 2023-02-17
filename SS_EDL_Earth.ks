@@ -13,6 +13,16 @@
 // Flip & burn: In the last couple of km, flip to vertical and use the sea level raptors to guide the ship to the tower
 // Catch:       The tower catches the StarShip in Mechazilla for a safe return home
 
+// Parameters:  useCam - if specified, the camera commands will be run (For recording videos)
+
+//---------------------------------------------------------------------------------------------------------------------
+// #endregion
+//---------------------------------------------------------------------------------------------------------------------
+// #region PARAMETERS
+//---------------------------------------------------------------------------------------------------------------------
+
+parameter useCam.
+
 //---------------------------------------------------------------------------------------------------------------------
 // #endregion
 //---------------------------------------------------------------------------------------------------------------------
@@ -324,6 +334,12 @@ function write_screen_see { // Write dynamic display elements and write telemetr
 		set logline to logline + round(mpsVrtTrg, 0) + ",".
 		log logline to log_see.
 	}
+
+	if useCam {
+		if (SHIP:altitude > mAltStrat) {   }
+		set cam:pitch to arcTan(SHIP:altitude / mSrf).
+	}
+
 }
 
 function get_pit { // Get current pitch
@@ -499,6 +515,20 @@ for mdSSFlap in arrSSFlaps {
 	mdSSFlap:setfield("deploy angle", 0).
 	// deploy control surfaces
 	mdSSFlap:setfield("deploy", true).
+}
+
+if useCam {
+	// Camera settings
+	global cam is addons:camera:flightcamera.
+	set cam:target to ptSSBody.
+	wait 1.
+	set cam:mode to "free".
+	wait 1.
+	set cam:heading to heading_of_vector(srfPrograde:vector).
+	wait 1.
+	set cam:pitch to 0.
+	wait 1.
+	set cam:distance to 100.
 }
 
 write_console_see().

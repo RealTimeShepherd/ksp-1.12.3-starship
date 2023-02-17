@@ -238,6 +238,11 @@ function write_screen_sul { // Write dynamic display elements and write telemetr
 		set logline to logline + round(throttle * 100, 2) + ",".
 		log logline to log_sul.
 	}
+
+	if useCam {
+		set cam:heading to heading_of_vector(srfPrograde:vector).
+	}
+
 }
 
 function fill_depot {
@@ -282,6 +287,15 @@ function topup_tanker_body { // The header tank doesn't quite have enough now th
 	if (trnLOXBD:active = false) { set trnLOXBD:active to true. }
 	if (trnCH4CM:active = false) { set trnCH4CM:active to true. }
 	if (trnCH4BD:active = false) { set trnCH4BD:active to true. }
+}
+
+function heading_of_vector { // heading_of_vector returns the heading of the vector (number range 0 to 360)
+	parameter vecT.
+	local east IS VCRS(SHIP:UP:VECTOR, SHIP:NORTH:VECTOR).
+	local trig_x IS VDOT(SHIP:NORTH:VECTOR, vecT).
+	local trig_y IS VDOT(east, vecT).
+	local result IS ARCTAN2(trig_y, trig_x).
+	if result < 0 { return 360 + result. } else { return result. }
 }
 
 //---------------------------------------------------------------------------------------------------------------------
@@ -339,9 +353,9 @@ if useCam {
 	wait 1.
 	set cam:mode to "free".
 	wait 1.
-	set cam:heading to 0.
+	set cam:heading to heading_of_vector(srfPrograde:vector).
 	wait 1.
-	set cam:pitch to 90.
+	set cam:pitch to 0.
 	wait 1.
 	set cam:distance to 100.
 }
@@ -368,21 +382,6 @@ write_console_sul().
 // #region FLIGHT
 //---------------------------------------------------------------------------------------------------------------------
 
-if vAng(SHIP:facing:vector, retrograde:vector) > 2 {
-	// STAGE: ORIENT FOR UNDOCK
-	rcs on.
-	if boolSSUp {
-		lock steering to lookDirUp(retrograde:vector, up:vector).
-	} else {
-		lock steering to lookDirUp(retrograde:vector, -up:vector).
-	}
-	local timOrient is time:seconds + 30.
-	until time:seconds > timOrient {
-		write_screen_sul("Orient for undock", true).
-	}
-	unlock steering.
-}
-
 // Stage: WAIT FOR UNDOCK
 rcs off.
 sas on.
@@ -391,6 +390,20 @@ set sasMode to "Retrograde".
 
 until mPad_sul > mMaxDist {
 	write_screen_sul("Wait for undock: " + round(((mMaxDist - mPad_sul) / 1000), 0) + " km", false).
+}
+
+if vAng(SHIP:facing:vector, retrograde:vector) > 2 {
+	// STAGE: ORIENT FOR UNDOCK
+	rcs on.
+	if boolSSUp {
+		lock steering to lookDirUp(retrograde:vector, up:vector).
+	} else {
+		lock steering to lookDirUp(retrograde:vector, -up:vector).
+	}
+	local timOrient is time:seconds + 10.
+	until time:seconds > timOrient {
+		write_screen_sul("Orient for undock", true).
+	}
 }
 
 // Stage: FUEL TRANSFER
@@ -409,10 +422,6 @@ if mdDPBDDock:hasevent("undock") {
 } else {
 	mdSSBDDock:doevent("undock").
 }
-if useCam {
-	set cam:mode to "free".
-}
-wait 0.1.
 if kuniverse:activevessel:name <> SHIP:name {
 	set kuniverse:activevessel to SHIP.
 }
@@ -427,9 +436,9 @@ until time:seconds > timeFire {
 	if useCam {
 		set cam:target to ptSSBody_sul.
 		wait 0.1.
-		set cam:heading to 0.
+		set cam:heading to heading_of_vector(srfPrograde:vector).
 		wait 0.1.
-		set cam:pitch to 90.
+		set cam:pitch to 0.
 	}
 }
 
@@ -439,15 +448,29 @@ local timeBackoff is time:seconds + 5.
 
 until time:seconds > timeBackoff {
 	write_screen_sul("Backoff", true).
+	if useCam {
+		set cam:mode to "chase".
+		wait 0.1.
+		set cam:target to ptSSBody_sul.
+		wait 0.1.
+		set cam:heading to heading_of_vector(srfPrograde:vector).
+		wait 0.1.
+		set cam:pitch to 0.
+	}
+}
+if kuniverse:activevessel:name <> SHIP:name {
+	set kuniverse:activevessel to SHIP.
 }
 
 // Stage: Lower PE
 for ptRaptorVac in arrRaptorVac_sul { ptRaptorVac:activate. }
-lock steering to retrograde.
 lock throttle to 1.
 
 until SHIP:orbit:periapsis < mTrgPE {
 	write_screen_sul("Lower Perigee", true).
+}
+if kuniverse:activevessel:name <> SHIP:name {
+	set kuniverse:activevessel to SHIP.
 }
 
 // Stage: FACE PROGRADE
@@ -462,4 +485,4 @@ until time:seconds > timOrient {
 
 // Stage: EDL
 set ag8 to false.
-runPath("SS_EDL_Earth.ks").
+runPath("SS_EDL_Earth.ks", useCam).

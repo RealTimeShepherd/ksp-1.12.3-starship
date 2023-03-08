@@ -66,21 +66,37 @@ global arrRaptorSL_sul is list().
 // Bind to ship parts (vdot calculations are used to distinguish between the two StarShips)
 for pt in SHIP:parts {
 	if pt:name:startswith("SEP.S20.HEADER") and vdot(ship:facing:topvector, pt:position) < 0 { set ptSSHeader0 to pt. }
+	if pt:name:startswith("SEP.22.SHIP.HEADER") and vdot(ship:facing:topvector, pt:position) < 0 { set ptSSHeader0 to pt. }
 	if pt:name:startswith("SEP.S20.HEADER") and vdot(ship:facing:topvector, pt:position) > 0 { set ptSSHeader1 to pt. }
+	if pt:name:startswith("SEP.22.SHIP.HEADER") and vdot(ship:facing:topvector, pt:position) > 0 { set ptSSHeader1 to pt. }
 	if pt:name:startswith("SEP.S20.TANKER") and vdot(ship:facing:topvector, pt:position) < 0 { set ptSSCommand0 to pt. }
+	if pt:name:startswith("SEP.22.SHIP.TANKER") and vdot(ship:facing:topvector, pt:position) < 0 { set ptSSCommand0 to pt. }
 	if pt:name:startswith("SEP.S20.TANKER") and vdot(ship:facing:topvector, pt:position) > 0 { set ptSSCommand1 to pt. }
+	if pt:name:startswith("SEP.22.SHIP.TANKER") and vdot(ship:facing:topvector, pt:position) > 0 { set ptSSCommand1 to pt. }
 	if pt:name:startswith("SEP.S20.CREW") and vdot(ship:facing:topvector, pt:position) < 0 { set ptSSCommand0 to pt. }
+	if pt:name:startswith("SEP.22.SHIP.CREW") and vdot(ship:facing:topvector, pt:position) < 0 { set ptSSCommand0 to pt. }
 	if pt:name:startswith("SEP.S20.CREW") and vdot(ship:facing:topvector, pt:position) > 0 { set ptSSCommand1 to pt. }
+	if pt:name:startswith("SEP.22.SHIP.CREW") and vdot(ship:facing:topvector, pt:position) > 0 { set ptSSCommand1 to pt. }
 	if pt:name:startswith("SEP.S20.BODY") and vdot(ship:facing:topvector, pt:position) < 0 { set ptSSBody0 to pt. }
+	if pt:name:startswith("SEP.22.SHIP.BODY") and vdot(ship:facing:topvector, pt:position) < 0 { set ptSSBody0 to pt. }
 	if pt:name:startswith("SEP.S20.BODY") and vdot(ship:facing:topvector, pt:position) > 0 { set ptSSBody1 to pt. }
+	if pt:name:startswith("SEP.S22.SHIP20.BODY") and vdot(ship:facing:topvector, pt:position) > 0 { set ptSSBody1 to pt. }
 	if pt:name:startswith("SEP.RAPTOR.VAC") and vdot(ship:facing:topvector, pt:position) < 0 { arrRaptorVac0:add(pt). }
+	if pt:name:startswith("SEP.22.RAPTOR.VAC") and vdot(ship:facing:topvector, pt:position) < 0 { arrRaptorVac0:add(pt). }
 	if pt:name:startswith("SEP.RAPTOR.VAC") and vdot(ship:facing:topvector, pt:position) > 0 { arrRaptorVac1:add(pt). }
+	if pt:name:startswith("SEP.22.RAPTOR.VAC") and vdot(ship:facing:topvector, pt:position) > 0 { arrRaptorVac1:add(pt). }
 	if pt:name:startswith("SEP.RAPTOR.SL") and vdot(ship:facing:topvector, pt:position) < 0 { arrRaptorSL0:add(pt). }
+	if pt:name:startswith("SEP.22.RAPTOR.SL") and vdot(ship:facing:topvector, pt:position) < 0 { arrRaptorSL0:add(pt). }
 	if pt:name:startswith("SEP.RAPTOR.SL") and vdot(ship:facing:topvector, pt:position) > 0 { arrRaptorSL1:add(pt). }
+	if pt:name:startswith("SEP.22.RAPTOR.SL") and vdot(ship:facing:topvector, pt:position) > 0 { arrRaptorSL1:add(pt). }
 	if pt:name:startswith("SEP.S20.FWD.LEFT") { set ptFlapFL_sul to pt. }
+	if pt:name:startswith("SEP.22.SHIP.FWD.LEFT") { set ptFlapFL_sul to pt. }
 	if pt:name:startswith("SEP.S20.FWD.RIGHT") { set ptFlapFR_sul to pt. }
+	if pt:name:startswith("SEP.22.SHIP.FWD.RIGHT") { set ptFlapFR_sul to pt. }
 	if pt:name:startswith("SEP.S20.AFT.LEFT") { set ptFlapAL_sul to pt. }
+	if pt:name:startswith("SEP.22.SHIP.AFT.LEFT") { set ptFlapAL_sul to pt. }
 	if pt:name:startswith("SEP.S20.AFT.RIGHT") { set ptFlapAR_sul to pt. }
+	if pt:name:startswith("SEP.22.SHIP.AFT.RIGHT") { set ptFlapAR_sul to pt. }
 }
 
 // Determine from a known part, which set of parts belong to each vessel
@@ -240,7 +256,7 @@ function write_screen_sul { // Write dynamic display elements and write telemetr
 	}
 
 	if useCam {
-		set cam:heading to heading_of_vector(srfPrograde:vector).
+		set cam:heading to heading_of_vector(srfPrograde:vector) - 10.
 	}
 
 }
@@ -353,7 +369,7 @@ if useCam {
 	wait 1.
 	set cam:mode to "free".
 	wait 1.
-	set cam:heading to heading_of_vector(srfPrograde:vector).
+	set cam:heading to heading_of_vector(srfPrograde:vector) - 10.
 	wait 1.
 	set cam:pitch to 0.
 	wait 1.
@@ -436,7 +452,7 @@ until time:seconds > timeFire {
 	if useCam {
 		set cam:target to ptSSBody_sul.
 		wait 0.1.
-		set cam:heading to heading_of_vector(srfPrograde:vector).
+		set cam:heading to heading_of_vector(srfPrograde:vector) - 10.
 		wait 0.1.
 		set cam:pitch to 0.
 	}
@@ -453,7 +469,7 @@ until time:seconds > timeBackoff {
 		wait 0.1.
 		set cam:target to ptSSBody_sul.
 		wait 0.1.
-		set cam:heading to heading_of_vector(srfPrograde:vector).
+		set cam:heading to heading_of_vector(srfPrograde:vector) - 10.
 		wait 0.1.
 		set cam:pitch to 0.
 	}

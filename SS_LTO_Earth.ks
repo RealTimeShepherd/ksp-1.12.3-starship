@@ -39,7 +39,7 @@ global arrSolarPanels_sle is list().
 global arrSPModules_sle is list().
 
 // Set target orbit values
-global mAPTrg is 511000. // Target apogee (it is assumed that variance in the gravitational field will affect this)
+global mAPTrg is 507000. // Target apogee (it is assumed that variance in the gravitational field will affect this)
 global mPETrg is 200000. // Target perigee
 global cnsGME is 3.986e+14. // Earth's gravitational constant
 global mEarthR is 6375000. // Radius of Earth (m)
@@ -81,15 +81,25 @@ global onBooster is true.
 // Bind to ship parts
 for pt in SHIP:parts {
 	if pt:name:startswith("SEP.S20.HEADER") { set ptSSHeader to pt. }
+	if pt:name:startswith("SEP.22.SHIP.HEADER") { set ptSSHeader to pt. }
 	if pt:name:startswith("SEP.S20.CREW") { set ptSSCommand to pt. }
+	if pt:name:startswith("SEP.22.SHIP.CREW") { set ptSSCommand to pt. }
 	if pt:name:startswith("SEP.S20.TANKER") { set ptSSCommand to pt. }
+	if pt:name:startswith("SEP.22.SHIP.TANKER") { set ptSSCommand to pt. }
 	if pt:name:startswith("SEP.S20.BODY") { set ptSSBody to pt. }
+	if pt:name:startswith("SEP.22.SHIP.BODY") { set ptSSBody to pt. }
 	if pt:name:startswith("SEP.S20.FWD.LEFT") { set ptFlapFL to pt. }
+	if pt:name:startswith("SEP.22.SHIP.FWD.LEFT") { set ptFlapFL to pt. }
 	if pt:name:startswith("SEP.S20.FWD.RIGHT") { set ptFlapFR to pt. }
+	if pt:name:startswith("SEP.22.SHIP.FWD.RIGHT") { set ptFlapFR to pt. }
 	if pt:name:startswith("SEP.S20.AFT.LEFT") { set ptFlapAL to pt. }
+	if pt:name:startswith("SEP.22.SHIP.AFT.LEFT") { set ptFlapAL to pt. }
 	if pt:name:startswith("SEP.S20.AFT.RIGHT") { set ptFlapAR to pt. }
+	if pt:name:startswith("SEP.22.SHIP.AFT.RIGHT") { set ptFlapAR to pt. }
 	if pt:name:startswith("SEP.RAPTOR.VAC") { arrRaptorVac_sle:add(pt). }
+	if pt:name:startswith("SEP.22.RAPTOR.VAC") { arrRaptorVac_sle:add(pt). }
 	if pt:name:startswith("SEP.RAPTOR.SL") { arrRaptorSL_sle:add(pt). }
+	if pt:name:startswith("SEP.22.RAPTOR2.SL.RC") { arrRaptorSL_sle:add(pt). }
 	if pt:name:startswith("nfs-panel-deploying-blanket-arm-1") { arrSolarPanels_sle:add(pt). }
 }
 
@@ -423,9 +433,9 @@ write_console_sle().
 
 if hastarget {
 	if target_is_body(target) {
-		lock degTarDlt to abs(abs(SHIP:orbit:lan - target:orbit:lan) - degOffInc).
+		lock degTarDlt to abs(abs(target:orbit:lan - SHIP:orbit:lan) - degOffInc).
 	} else {
-		lock degTarDlt to abs(SHIP:orbit:lan - target:orbit:lan).
+		lock degTarDlt to target:orbit:lan - SHIP:orbit:lan.
 	}
 } else {
 	lock degTarDlt to 0.
@@ -438,8 +448,10 @@ if SHIP:status = "PRELAUNCH" {
 		write_screen_sle("Pre-launch", false).
 	}
 
-	if target_is_vessel(target) {
-		lock degTarDlt to SHIP:orbit:lan - target:orbit:lan.
+	if hastarget {
+		if target_is_vessel(target) {
+			lock degTarDlt to target:orbit:lan - SHIP:orbit:lan.
+		}
 	}
 
 	// Stage: ON BOOSTER
@@ -448,6 +460,7 @@ if SHIP:status = "PRELAUNCH" {
 		set onBooster to false.
 		for pt in SHIP:parts {
 			if pt:name:startswith("SEP.B4.INTER") { set onBooster to true. }
+			if pt:name:startswith("SEP.22.BOOSTER.INTER") { set onBooster to true. }
 		}
 	}
 

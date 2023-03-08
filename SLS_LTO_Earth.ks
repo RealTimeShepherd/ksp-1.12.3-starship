@@ -31,17 +31,29 @@ global log_lle is "Telemetry/sls_lto_earth_log.csv".
 
 // Launch variables
 global mGravTurn is 500. // Altitude to start gravity turn
-global kNThrLaunch is 7400. // Kn Thrust to trigger launch clamp release
+global kNThrLaunch is 7400. // Kn Thrust (above) to trigger launch clamp release
+global kNThrSRBJet is 2000. // Kn Thrust (below) to trigger SRB jettison
 
-// Arrays for flaps and engines
+// Arrays for engines and fairings
 global arrRS25s is list().
 global arrSRBs is list().
 global arrNoseCones is list().
+global arrSRBDecouplers is list().
+global arrDcMds is list().
 global arrRS25Mds is list().
+global arrSRBMds is list().
+global arrOrionRCS is list().
+global arrOrionAuxRCS is list().
+global arrOrionRCSMDs is list().
+global arrOrionAuxRCSMDs is list().
+global arrFairings is list().
+global arrFairMDs is list().
+global arrSolarPanels is list().
+global arrSPModules is list().
 
 // Set target orbit values
-global mAPTrg is 511000. // Target apogee (it is assumed that variance in the gravitational field will affect this)
-global mPETrg is 200000. // Target perigee
+global mAPTrg is 1800000. // Target apogee (it is assumed that variance in the gravitational field will affect this)
+global mPETrg is 162000. // Target perigee
 global cnsGME is 3.986e+14. // Earth's gravitational constant
 global mEarthR is 6375000. // Radius of Earth (m)
 global mAPRad is mAPTrg + mEarthR.
@@ -49,13 +61,13 @@ global mPERad is mPETrg + mEarthR.
 global mpsHrzTrg is sqrt(2 * cnsGME * mAPRad / (mPERad * (mAPRad + mPERad))). // Target velocity at perigee
 
 // Engine performance values (Calculated from in-game telemetry)
-global mpsExhVel is 3231. // RS-25 engines exhaust velocity
-global tpsMLRate is 3.4. // Mass in tons lost per second of all 4 RS-25 engines firing
+global mpsExhVel is 4100. // RS-25 engines exhaust velocity
+global tpsMLRate is 2.094. // Mass in tons lost per second of all 4 RS-25 engines firing
 
 global mpsVrtTrg is 0. // Vertical speed target
 global sToTrgVel is 0. // Seconds to target velocity
 global sToZoVrDl is 0. // Seconds to zero vertical speed delta
-global sToOrbIns is 10. // Achieve target vspeed delta of zero this many seconds before orbital insertion
+global sToOrbIns is 250. // Achieve target vspeed delta of zero this many seconds before orbital insertion
 
 // Target inclination, this should be timed so precession causes alignment on the desired day
 global degOffInc is 70. // Current reckoning of 7 degrees a day, so set to 70 if you want to align in ten days
@@ -83,39 +95,81 @@ for pt in SHIP:parts {
 	if pt:name:startswith("AM.MLP.SaturnTowerCrewArm") { set ptOrionCrew to pt. }
 	if pt:name:startswith("AM.MLP.SaturnTowerSwingArm0") { set ptSLSSwing to pt. }
 	if pt:name:startswith("AM.MLP.SaturnMobileLauncherClampBase") { set ptLauncher to pt. }
+	if pt:name:startswith("benjee10.orion.abort.abortMotor") { set ptAbortMotor to pt. }
+	if pt:name:startswith("benjee10.orion.abort.attitudeMotor") { set ptAttMotor to pt. }
+	if pt:name:startswith("benjee10.orion.abort.BPC") { set ptAbortCover to pt. }
+	if pt:name:startswith("benjee10.orion.Capsule") { set ptOrionCapsule to pt. }
+	if pt:name:startswith("benjee10.orion.drogueChuteDouble") { set ptOrionDrogue to pt. } //RealChuteModule
+	if pt:name:startswith("benjee10.orion.mainChuteTriple") { set ptOrionMainChute to pt. } //RealChuteModule
+	if pt:name:startswith("benjee10.orion.forwardBayCover") { set ptOrionBayCover to pt. } //ModuleDecouple
+	if pt:name:startswith("benjee10.orion.decoupler") { set ptOrionDecoupler to pt. } //ModuleAnimatedDecoupler
+	if pt:name:startswith("benjee10.orion.SM.adapter") { set ptOrionSMAdapter to pt. } //ModuleDecouple
+	if pt:name:startswith("benjee10.orion.RCS") { arrOrionRCS:add(pt). }
+	if pt:name:startswith("benjee10.orion.auxThruster2") { arrOrionAuxRCS:add(pt). }
+	if pt:name:startswith("benjee10.orion.fairingPanel") { arrFairings:add(pt). }
+	if pt:name:startswith("benjee10.orion.solarArray") { arrSolarPanels:add(pt). }
+	if pt:name:startswith("ROE-AJ10-190") { set ptOrionMainEngine to pt. } //ModuleEnginesRF
+	if pt:name:startswith("bluedog.DeltaIV.DCSS.5m") { set ptICPSBody to pt. } //ModuleRCSFX
+	if pt:name:startswith("ROE-RL10B2") { set ptICPSMainEngine to pt. } //ROEDeployableEngine
+	if pt:name:startswith("benjee10.SLS.LVSA") { set ptLVSA to pt. }
 	if pt:name:startswith("benjee10.SLS.coreStage") { set ptCore to pt. }
 	if pt:name:startswith("PC.5Seg.RSRM") { arrSRBs:add(pt). }
+	if pt:name:startswith("PC.RSRM.RadialDecoupler") { arrSRBDecouplers:add(pt). }
 	if pt:name:startswith("PC.Nose") { arrNoseCones:add(pt). }
-	if pt:name:startswith("rmm.cotopaxi") { arrRS25s:add(pt). }
+	if pt:name:startswith("ROE-RS25") { arrRS25s:add(pt). }
 }
 
 // Bind to Swing Arm modules
-if defined ptOrionSwing {
-	set mdOrionSwing to ptOrionSwing:getmodulebyindex(4).
-}
-if defined ptOrionCrew {
-	set mdOrionCrew to ptOrionCrew:getmodule("ModuleAnimateGenericExtra").
-}
-if defined ptSLSSwing {
-	set mdSLSSwing to ptSLSSwing:getmodule("ModuleAnimateGenericExtra").
-}
+if defined ptOrionSwing { set mdOrionSwing to ptOrionSwing:getmodulebyindex(4). }
+if defined ptOrionCrew { set mdOrionCrew to ptOrionCrew:getmodule("ModuleAnimateGenericExtra"). }
+if defined ptSLSSwing { set mdSLSSwing to ptSLSSwing:getmodule("ModuleAnimateGenericExtra"). }
 
 // Bind to Launch clamp
-if defined ptLauncher {
-	set mdLaunchClamp to ptLauncher:getmodule("LaunchClamp").
-}
+if defined ptLauncher { set mdLaunchClamp to ptLauncher:getmodule("LaunchClamp"). }
 
-for ptRS25 in arrRS25s {
-	arrRS25Mds:add(ptRS25:getmodule("ModuleEnginesRF")).
-}
+// Bind to Launch Abort modules
+if defined ptAbortCover { set mdAbortCover to ptAbortCover:getmodule("ModuleDecouple"). }
+if defined ptAttMotor { set mdAttMotor to ptAttMotor:getmodule("ModuleRCSFX"). }
+
+// Bind to Orion Capsule RCS module
+if defined ptOrionCapsule { set mdOrionCapsuleRCS to ptOrionCapsule:getmodule("ModuleRCSFX"). }
+
+// Bind to Orion Chute Modules
+if defined ptOrionDrogue { set mdOrionDrogue to ptOrionDrogue:getmodule("RealChuteModule"). }
+if defined ptOrionMainChute { set mdOrionMainChute to ptOrionMainChute:getmodule("RealChuteModule"). }
+
+// Bind to Orion Decoupler modules
+if defined ptOrionBayCover { set mdOrionBayCover to ptOrionBayCover:getmodule("ModuleDecouple"). }
+if defined ptOrionDecoupler { set mdOrionDecoupler to ptOrionDecoupler:getmodule("ModuleAnimatedDecoupler"). }
+if defined ptOrionSMAdapter { set mdOrionSMAdapter to ptOrionSMAdapter:getmodule("ModuleDecouple"). }
+
+// Bind to Orion RCS modules
+for ptOrionRCS in arrOrionRCS { arrOrionRCSMDs:add(ptOrionRCS:getmodule("ModuleRCSFX")). }
+for ptOrionAuxRCS in arrOrionAuxRCS { arrOrionAuxRCSMDs:add(ptOrionAuxRCS:getmodule("ModuleRCSFX")). }
+
+// Bind to Upper stage engine modules
+if defined ptOrionMainEngine { set mdOrionMainEngine to ptOrionMainEngine:getmodule("ModuleEnginesRF"). }
+if defined ptICPSBody { set mdICPSBody to ptICPSBody:getmodule("ModuleRCSFX"). }
+if defined ptICPSMainEngine { set mdICPSMainEngine to ptICPSMainEngine:getmodule("ROEDeployableEngine"). }
+
+// Bind to SRB decoupler modules
+for ptDecoupler in arrSRBDecouplers { arrDcMds:add(ptDecoupler:getmodule("ModuleAnchoredDecoupler")). }
+
+// Bind to Launch Vehicle Stage Adaptor module
+if defined ptLVSA { set mdLVSA to ptLVSA:getmodule("ModuleDecouple"). }
+
+// Bind to fairing modules
+for ptFairing in arrFairings { arrFairMDs:add(ptFairing:getmodule("ModuleDecouple")). }
+
+// Bind to solar panel modules
+for ptSolarPanel in arrSolarPanels { arrSPModules:add(ptSolarPanel:getmodule("ModuleDeployableSolarPanel")). }
 
 // Bind to resources within SLS core stage
-if defined ptCore {
-	for rsc in ptCore:resources {
-		if rsc:name = "LqdOxygen" { set rsCoreLOX to rsc. }
-		if rsc:name = "LqdHydrogen" { set rsCoreLH2 to rsc. }
-	}
-}
+if defined ptCore { for rsc in ptCore:resources { if rsc:name = "LqdHydrogen" { set rsCoreLH2 to rsc. } } }
+
+// Bind to launch vehicle engine modules
+for ptRS25 in arrRS25s { arrRS25Mds:add(ptRS25:getmodule("ModuleEnginesRF")). }
+for ptSRB in arrSRBs { arrSRBMds:add(ptSRB:getmodule("ModuleEnginesRF")). }
 
 //---------------------------------------------------------------------------------------------------------------------
 // #endregion
@@ -278,9 +332,9 @@ function calculate_pitch { // Adjust pitch by increments depending upon when ver
 	if sToTrgVel < sToOrbIns { // Orbital instertion
 		if (chgInDlt < 0 and mpsVrtDlt > 0) or (chgInDlt > 0 and mpsVrtDlt < 0) { // Delta is increasing - do something
 			if mpsVrtDlt > 0 {
-				return degPitTrg - 0.2.
+				return degPitTrg - 0.04.
 			} else {
-				return degPitTrg + 0.2.
+				return degPitTrg + 0.04.
 			}
 		} else { // Delta is decreasing - do nothing
 			return degPitTrg.
@@ -323,7 +377,10 @@ function target_is_vessel { // Is parameter a valid target
 // #region INITIALISE
 //---------------------------------------------------------------------------------------------------------------------
 
-// Enable RCS modules
+// Enable All RCS modules
+mdOrionCapsuleRCS:setfield("rcs", True).
+for mdOrionRCS in arrOrionRCSMDs { mdOrionRCS:setfield("rcs", True). }
+mdICPSBody:setfield("rcs", True).
 
 // Nullify RCS control values
 set SHIP:control:pitch to 0.
@@ -340,6 +397,9 @@ lock throttle to 0.
 // Shut down RS-25s
 for ptRS25 in arrRS25s { ptRS25:shutdown. }
 
+// Steering manager configuration
+set steeringManager:rollts to 10.
+
 // Retract Crew arm
 if mdOrionCrew:hasevent("retract arm") { mdOrionCrew:doevent("retract arm"). }
 
@@ -351,7 +411,7 @@ write_console_lle().
 // #region FLIGHT
 //---------------------------------------------------------------------------------------------------------------------
 
-if SHIP:status <> "PRELAUNCH" {
+if SHIP:status = "PRELAUNCH" {
 
 	// Stage: PRE-LAUNCH
 	if target_is_body(launchTrg) {
@@ -371,12 +431,13 @@ if SHIP:status <> "PRELAUNCH" {
 	if mdSLSSwing:hasevent("retract arm") { mdSLSSwing:doevent("retract arm"). }
 
 	until kNThrust > kNThrLaunch {
-		write_screen_lle(kNThrust, false).
+		write_screen_lle("Ignition", false).
 	}
 
 	// Stage: LIFT OFF
-	//lock kNThrust to 
-	lock steering to up.
+	local vecFacLaunch is SHIP:facing:topvector.
+	lock kNThrust to arrSRBMds[0]:getfield("thrust") + arrSRBMds[1]:getfield("thrust").
+	lock steering to lookDirUp(up:vector, vecFacLaunch).
 	for ptSRB in arrSRBs { ptSRB:activate. }
 	mdLaunchClamp:doevent("release clamp").
 
@@ -385,33 +446,44 @@ if SHIP:status <> "PRELAUNCH" {
 	}
 
 	// Stage: GRAVITY TURN
-	set degPitTrg to (1 - (sqrt((SHIP:apoapsis - mGravTurn) / mPETrg) * 1.05)) * 90.
-	lock steering to lookDirUp(heading(90 - degYawTrg, degPitTrg):vector, up:vector).
+	rcs on.
+	lock degGrvTrn to (1 - (sqrt((SHIP:apoapsis - mGravTurn) / mPETrg) * 1.05)) * 90.
+	lock steering to lookDirUp(heading(90 - degYawTrg, degGrvTrn):vector, up:vector).
 
-	until false {
-		write_screen_lle("Gravity turn", true).
+	until kNThrust < kNThrSRBJet {
+		write_screen_lle("Stage 1 (SRB)", true).
 		set degYawTrg to pidYaw:update(time:seconds, degTrgInc).
 	}
 
 	// Stage: JETTISON SRBs
-
-	until false {
-		write_screen_lle("Stage", true).
-	}
+	for ptNoseCone in arrNoseCones { ptNoseCone:activate. }
+	for mdDC in arrDcMds { mdDC:doevent("decouple"). }
 
 	// Stage: STAGE 2
 	lock steering to lookDirUp(heading(heading_of_vector(prograde:vector) - degYawTrg, degPitTrg + vang(prograde:vector, vxcl(up:vector, prograde:vector))):vector, up:vector).
 	set mpsVrtTrg to calculate_tvspd().
 
+	set bFairings to True.
+	set bLAS to True.
 	until sToTrgVel < sToOrbIns {
 		write_screen_lle("Ascent", true).
 		set mpsVrtTrg to calculate_tvspd().
 		set degPitTrg to calculate_pitch().
+		if bFairings and missionTime > 191 { // Jettison fairings
+			for mdFairing in arrFairMDs { mdFairing:doevent("decouple"). }
+			set bFairings to False.
+		}
+		if bLAS and missionTime > 196 { // Jettison LAS
+			mdAttMotor:setfield("rcs", True).
+			ptAbortMotor:activate.
+			mdAbortCover:doevent("decouple").
+			set bLAS to False.
+		}
 		set degYawTrg to 0 - pidYaw:update(time:seconds, degTrgInc).
 	}
 
 	// Stage: ORBITAL INSERTION
-	until SHIP:orbit:apoapsis > (mAPTrg * 0.9) {
+	until SHIP:orbit:apoapsis > (mAPTrg * 0.99) {
 		write_screen_lle("Orbital insertion", true).
 		set mpsVrtTrg to calculate_tvspd().
 		set degPitTrg to calculate_pitch().
@@ -423,11 +495,19 @@ if SHIP:status <> "PRELAUNCH" {
 	set degPitTrg to 0.
 	lock throttle to 0.4.
 
-	until SHIP:orbit:apoapsis > (mAPTrg * 0.97) {
+	until SHIP:orbit:apoapsis > (mAPTrg * 0.995) {
 		write_screen_lle("Trim        ", true).
 	}
 
 	lock throttle to 0.
+	// Stage: MECO - DECOUPLE
+
+	local timeWait is time:seconds + 10.
+	until time:seconds > timeWait {
+		write_screen_lle("MECO: Decouple", true).
+	}
+
+	mdLVSA:doevent("decouple").
 	rcs on.
 	set SHIP:control:fore to 1.
 
@@ -437,6 +517,7 @@ if SHIP:status <> "PRELAUNCH" {
 	}
 
 	// Stage: COAST TO APOGEE
+	for mdSP in arrSPModules { mdSP:doaction("extend solar panel", true). }
 	set SHIP:control:fore to 0.
 
 	lock steering to lookDirUp(prograde:vector, up:vector).
@@ -466,31 +547,25 @@ if SHIP:status <> "PRELAUNCH" {
 	lock throttle to 0.
 	rcs off.
 
-	local timeWait is time:seconds + 1.
+	set timeWait to time:seconds + 1.
 	until time:seconds > timeWait {
 		write_screen_lle("Orbit attained", true).
 	}
 	sas off.
 
-	if target_is_vessel(target:name) {
-		runPath("SS_RVD_LEO.ks", target:name).
-	} else {
+	// Stage: Orient for coast
+	lock steering to lookDirUp(prograde:vector, up:vector).
 
-		// Stage: Orient for coast
-		lock steering to lookDirUp(prograde:vector, up:vector).
-
-		rcs on.
-		set timOrient to time:seconds + 10.
-		until time:seconds > timOrient {
-			write_screen_lle("Orient for coast", true).
-		}
-		unlock steering.
-		rcs off.
-		sas on.
-		wait 0.2.
-		set sasMode to "Prograde".
-
+	rcs on.
+	set timOrient to time:seconds + 10.
+	until time:seconds > timOrient {
+		write_screen_lle("Orient for coast", true).
 	}
+	unlock steering.
+	rcs off.
+	sas on.
+	wait 0.2.
+	set sasMode to "Prograde".
 
 }
 

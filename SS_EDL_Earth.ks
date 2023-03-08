@@ -143,15 +143,24 @@ set pidThr:setpoint to 0.
 // Bind to ship parts
 for pt in SHIP:parts {
 	if pt:name:startswith("SEP.S20.HEADER") { set ptSSHeader to pt. }
+	if pt:name:startswith("SEP.22.SHIP.HEADER") { set ptSSHeader to pt. }
 	if pt:name:startswith("SEP.S20.CREW") { set ptSSCommand to pt. }
+	if pt:name:startswith("SEP.22.SHIP.CREW") { set ptSSCommand to pt. }
 	if pt:name:startswith("SEP.S20.TANKER") { set ptSSCommand to pt. }
+	if pt:name:startswith("SEP.22.SHIP.TANKER") { set ptSSCommand to pt. }
 	if pt:name:startswith("SEP.S20.BODY") { set ptSSBody to pt. }
+	if pt:name:startswith("SEP.22.SHIP.BODY") { set ptSSBody to pt. }
 	if pt:name:startswith("SEP.S20.FWD.LEFT") { set ptFlapFL to pt. }
+	if pt:name:startswith("SEP.22.SHIP.FWD.LEFT") { set ptFlapFL to pt. }
 	if pt:name:startswith("SEP.S20.FWD.RIGHT") { set ptFlapFR to pt. }
+	if pt:name:startswith("SEP.22.SHIP.FWD.RIGHT") { set ptFlapFR to pt. }
 	if pt:name:startswith("SEP.S20.AFT.LEFT") { set ptFlapAL to pt. }
+	if pt:name:startswith("SEP.22.SHIP.AFT.LEFT") { set ptFlapAL to pt. }
 	if pt:name:startswith("SEP.S20.AFT.RIGHT") { set ptFlapAR to pt. }
+	if pt:name:startswith("SEP.22.SHIP.AFT.RIGHT") { set ptFlapAR to pt. }
 	if pt:name:startswith("SEP.RAPTOR.VAC") { arrRaptorVac:add(pt). }
-	if pt:name:startswith("SEP.RAPTOR.SL") {
+	if pt:name:startswith("SEP.22.RAPTOR2.SL.RC") { arrRaptorVac:add(pt). }
+	if pt:name:startswith("SEP.RAPTOR.SL") OR pt:name:startswith("SEP.22.RAPTOR2.SL.RC") {
 		if vdot(ship:facing:topvector, pt:position) > 0 {
 			set ptRaptorSLA to pt.
 		} else {
@@ -336,8 +345,12 @@ function write_screen_see { // Write dynamic display elements and write telemetr
 	}
 
 	if useCam {
-		if (SHIP:altitude > mAltStrat) {   }
-		set cam:pitch to arcTan(SHIP:altitude / mSrf).
+		if (SHIP:altitude > mAltStrat) {
+			set cam:heading to heading_of_vector(srfPrograde:vector) - 10.
+		}
+		if (SHIP:altitude < mAltTherm) {
+			set cam:pitch to arcTan(SHIP:altitude / mSrf).
+		}
 	}
 
 }
@@ -521,13 +534,13 @@ if useCam {
 	// Camera settings
 	global cam is addons:camera:flightcamera.
 	set cam:target to ptSSBody.
-	wait 1.
+	wait 2.
 	set cam:mode to "free".
-	wait 1.
-	set cam:heading to heading_of_vector(srfPrograde:vector).
-	wait 1.
+	wait 2.
+	set cam:heading to heading_of_vector(srfPrograde:vector) - 10.
+	wait 2.
 	set cam:pitch to 0.
-	wait 1.
+	wait 2.
 	set cam:distance to 100.
 }
 

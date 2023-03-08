@@ -80,12 +80,15 @@ set pidThr:setpoint to 0.
 // Bind to ship parts
 for pt in SHIP:parts {
 	if pt:name:startswith("SEP.B4.INTER") { set ptBInter to pt. }
+	if pt:name:startswith("SEP.22.BOOSTER.INTER") { set ptBInter to pt. }
 	if pt:name:startswith("SEP.B4.CORE") { set ptBCore to pt. }
+	if pt:name:startswith("SEP.22.BOOSTER.CORE") { set ptBCore to pt. }
 	if pt:name:startswith("SEP.B4.33.CLUSTER") { set ptEngClus to pt. }
+	if pt:name:startswith("SEP.22.BOOSTER.CLUSTER") { set ptEngClus to pt. }
 	if pt:name:startswith("KI.SS.Quickdisconect") { set ptQDSH to pt. }
 	if pt:name:startswith("KI.SS.Shiparm") { set ptQDSS to pt. }
 	if pt:name:startswith("SLE.SS.OLP") { set ptOLP to pt. }
-	if pt:name:startswith("SEP.B4.GRIDFIN") {
+	if pt:name:startswith("SEP.B4.GRIDFIN") OR pt:name:startswith("SEP.22.BOOSTER.GRIDFIN") {
 		if vdot(ship:facing:topvector, pt:position) > 0 {
 			if vdot(ship:facing:starvector, pt:position) > 0 {
 				set ptGridFL to pt.
@@ -364,6 +367,7 @@ write_console_ble().
 if SHIP:status = "PRELAUNCH" {
 
 	// Stage: PRE-LAUNCH
+	lock degTrgInc to 0.
 	if target_is_body(launchTrg) {
 		lock degTrgInc to abs(abs(SHIP:orbit:lan - target:orbit:lan) - degOffInc).
 		set target to launchTrg.

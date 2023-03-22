@@ -37,22 +37,26 @@ global log_see is "Telemetry/ss_edl_earth_log.csv".
 // Probably add 90 deg to the heading and add a short vector along that axis for the catch point
 // Then remove 90 deg from the heading to get the entry direction
 
-global pad is latlng(25.9669968, -97.1416771). // Tower Catch point - BC OLIT 1
+//global pad is latlng(25.9669968, -97.1416771). // Tower Catch point - BC OLIT 1
+global pad is latlng(25.96699055, -97.14170814). // Tower Catch point - BC OLIT 1
 global degPadEnt is 262.
 global mAltWP1 is 400. // Waypoints - ship will travel through these altitudes - originally 600
 global mAltWP2 is 250. // Originally 300
-global mAltRad is 42. // Caught when SHIP:bounds:bottomaltradar is less than this value
+global mAltRad is 41. // Caught when SHIP:bounds:bottomaltradar is less than this value
 global mAltAP1 is 300. // Aim points - ship will aim at these altitudes
 global mAltAP2 is 230.
 global mAltAP3 is 200.
 
 // Positioning fuel between header and body for balanced EDL
-global mRapA2COM is 23.9. // The distance from the vessel centre of mass to the Raptor 'A' engine for a balanced craft
+// global mRapA2COM is 23.9. // The distance from the vessel centre of mass to the Raptor 'A' engine for a balanced craft
+// global mRapA2COM is 20.15. // This one maybe caused an interesting crash
+global mRapA2COM is 20.75. // The distance from the vessel centre of mass to the Raptor 'A' engine for a balanced craft
 
 // Long range pitch tracking
 // Ship mass of 151 - Trying 88
 // Ship mass of 131.7 - 86 works fine (Header tank only)
-global cnsLrp is (11 * SHIP:mass / 60) + 73. // Jury is still out regarding this value - suspect will not work for high mass
+//global cnsLrp is (11 * SHIP:mass / 60) + 73. // Jury is still out regarding this value - suspect will not work for high mass
+global cnsLrp is (11 * SHIP:mass / 60) + 63. 
 //global cnsLrp is (SHIP:mass / 12) + 88. // 89 - original - 86 works better for low mass StarShip
 global mLrpTrg is 12200.
 global ratLrp is 0.011.
@@ -62,12 +66,12 @@ global qrcLrp is 0.
 global cnsSrp is 0.016.
 //global cnsSrp is (SHIP:mass / 20000) + 0.0095. // surface m gained per m lost in altitude for every degree of pitch forward
 //global cnsSrp is 0.017. // surface m gained per m lost in altitude for every degree of pitch forward, 17 - original
-global mSrpTrgDst is 200.
+global mSrpTrgDst is 20.
 global mSrpTrgAlt is 1200.
 
 // Set min/max ranges
-global degPitMax is 80.
-global degPitMin is 40.
+global degPitMax is 85.
+global degPitMin is 35.
 
 // Set target values
 global degPitTrg is 0.
@@ -81,6 +85,7 @@ global mAltTherm is 88000.
 global kpaMeso is 0.5.
 global mAltStrat is 50000.
 global mpsTrop is 1600.
+global mpsFlare is 375.
 
 // PID controller values
 global arrPitMeso is list (1.5, 0.1, 3).
@@ -159,7 +164,7 @@ for pt in SHIP:parts {
 	if pt:name:startswith("SEP.S20.AFT.RIGHT") { set ptFlapAR to pt. }
 	if pt:name:startswith("SEP.22.SHIP.AFT.RIGHT") { set ptFlapAR to pt. }
 	if pt:name:startswith("SEP.RAPTOR.VAC") { arrRaptorVac:add(pt). }
-	if pt:name:startswith("SEP.22.RAPTOR2.SL.RC") { arrRaptorVac:add(pt). }
+	if pt:name:startswith("SEP.22.RAPTOR.VAC") { arrRaptorVac:add(pt). }
 	if pt:name:startswith("SEP.RAPTOR.SL") OR pt:name:startswith("SEP.22.RAPTOR2.SL.RC") {
 		if vdot(ship:facing:topvector, pt:position) > 0 {
 			set ptRaptorSLA to pt.
@@ -218,6 +223,17 @@ if defined ptFlapAL {
 if defined ptFlapAR {
 	set mdFlapARCS to ptFlapAR:getmodule("ModuleSEPControlSurface").
 	arrSSFlaps:add(mdFlapARCS).
+}
+
+// Bind to Sea level raptor gimbals
+if defined ptRaptorSLA {
+	set mdGimbalSLA to ptRaptorSLA:getmodule("ModuleGimbal").
+}
+if defined ptRaptorSLB {
+	set mdGimbalSLB to ptRaptorSLB:getmodule("ModuleGimbal").
+}
+if defined ptRaptorSLC {
+	set mdGimbalSLC to ptRaptorSLC:getmodule("ModuleGimbal").
 }
 
 //---------------------------------------------------------------------------------------------------------------------
@@ -514,6 +530,9 @@ lock throttle to 0.
 ptRaptorSLA:shutdown.
 ptRaptorSLB:shutdown.
 ptRaptorSLC:shutdown.
+mdGimbalSLA:doaction("lock gimbal", true).
+mdGimbalSLB:doaction("lock gimbal", true).
+mdGimbalSLC:doaction("lock gimbal", true).
 
 // Shut down vacuum Raptors
 for ptRaptorVac in arrRaptorVac { ptRaptorVac:shutdown. }
@@ -573,13 +592,20 @@ until SHIP:altitude < mAltOuter {
 
 if SHIP:altitude > mAltUpper {
 	// Stage: BALANCE FUEL
-	empty_header().
 	empty_command().
-
-	local timeFuel is time:seconds + 5.
+	local timeFuel is time:seconds + 3.
 	until time:seconds > timeFuel {
-		write_screen_see("Empty header", false).
+		write_screen_see("Empty command", false).
 	}
+
+	if ptRaptorSLA:position:mag > mRapA2COM {
+		empty_header().
+		set timeFuel to time:seconds + 2.
+		until time:seconds > timeFuel {
+			write_screen_see("Empty header", false).
+		}
+	}
+
 	until ptRaptorSLA:position:mag > mRapA2COM or round(rsHDLOX:capacity, 0) = round(rsHDLOX:amount, 0) or rsBDLOX:amount = 0 {
 		write_screen_see("Fill header", false).
 		set trnLOXB2H to transfer("lqdOxygen", ptSSBody, ptSSHeader, 57).
@@ -599,8 +625,13 @@ if SHIP:altitude > mAltUpper {
 }
 
 // Stage: UPPER ATMOSPHERE
+rcs on.
+sas off.
+lock steering to lookdirup(heading(pad:heading, max(min(degPitTrg, degPitMax), degPitMin)):vector, SHIP:srfRetrograde:vector).
+
 until SHIP:altitude < mAltTherm {
 	write_screen_see("Upper atmos.", false).
+	set degPitTrg to 60.
 }
 
 // Stage: THERMOSPHERE
@@ -656,10 +687,12 @@ set pidPit to pidLoop(arrPitTrop[0], arrPitTrop[1], arrPitTrop[2]).
 set pidYaw to pidLoop(arrYawTrop[0], arrYawTrop[1], arrYawTrop[2], -10, 10).
 set pidRol to pidLoop(arrRolTrop[0], arrRolTrop[1], arrRolTrop[2], -10, 10).
 
-until calculate_srp() > calculate_lrp() {
+until SHIP:groundspeed < mpsFlare or calculate_srp() > calculate_lrp() {
 	write_screen_see("Troposphere (Flaps)", true).
 	set degPitTrg to calculate_lrp().
 	set degYawTrg to kpaDynPrs * (0 - degBerPad).
+	if degYawTrg > 10 { set degYawTrg to 10. }
+	if degYawTrg < -10 { set degYawTrg to -10. }
 	calculate_csf().
 	set_flaps().
 }
@@ -703,6 +736,9 @@ set degPitTrg to 170.
 ptRaptorSLA:activate.
 ptRaptorSLB:activate.
 ptRaptorSLC:activate.
+mdGimbalSLA:doaction("free gimbal", true).
+mdGimbalSLB:doaction("free gimbal", true).
+mdGimbalSLC:doaction("free gimbal", true).
 lock throttle to 1.
 set SHIP:control:yaw to 0.
 set SHIP:control:roll to 0.
@@ -734,7 +770,7 @@ lock steering to lookDirUp(srfRetrograde:vector, heading(degPadEnt, 0):vector).
 lock mpsVrtTrg to (mAltTrg - SHIP:altitude) / 5.
 lock throttle to max(0.4, pidThr:update(time:seconds, SHIP:verticalspeed - mpsVrtTrg)). // Attempt to hover at mAltTrg
 
-until SHIP:altitude < mAltWP1 or SHIP:verticalspeed > -20 {
+until SHIP:altitude < mAltWP1 or SHIP:verticalspeed > -10 {
 	write_screen_see("Balance Throttle", true).
 }
 
@@ -743,12 +779,15 @@ set mAltTrg to mAltAP2.
 local mpsStart is SHIP:verticalspeed.
 local mpsEnd is -5.
 local mAltStart is SHIP:altitude.
-lock mpsVrtTrg to mpsEnd + (mpsStart * ((SHIP:altitude - mAltTrg) / (mAltStart - mAltTrg))).
+lock mpsVrtTrg to max(-10, mpsEnd + (mpsStart * ((SHIP:altitude - mAltTrg) / (mAltStart - mAltTrg)))).
 if SHIP:mass > 180 {
-	ptRaptorSLA:shutdown.
+	ptRaptorSLC:shutdown.
+	mdGimbalSLC:doaction("lock gimbal", true).
 } else {
 	ptRaptorSLB:shutdown.
+	mdGimbalSLB:doaction("lock gimbal", true).
 	ptRaptorSLC:shutdown.
+	mdGimbalSLC:doaction("lock gimbal", true).
 }
 lock vecSrfVel to vxcl(up:vector, SHIP:velocity:surface).
 set sTTR to 0.01 + min(5, mSrf / 10).
@@ -762,6 +801,10 @@ unlock degVAng.
 until mSrf < 5 and SHIP:groundspeed < 3 and SHIP:altitude < mAltWP2 {
 	write_screen_see("Tower Approach", true).
 	set_rcs_translate(vecThr:mag, degThrHed).
+	if SHIP:verticalspeed > mpsVrtTrg + 2 {
+		ptRaptorSLB:shutdown.
+		mdGimbalSLB:doaction("lock gimbal", true).
+	}
 }
 
 // Stage: DESCENT
@@ -769,7 +812,7 @@ lock steering to lookDirUp(up:vector, heading(degPadEnt, 0):vector).
 set mAltTrg to mAltAP3.
 local B is SHIP:bounds. // get the :bounds suffix ONCE.
 
-until B:bottomaltradar < mAltRad {
+until B:bottomaltradar < mAltRad or SHIP:verticalspeed > -0.1 {
 	write_screen_see("Descent", true).
 	set_rcs_translate(vecThr:mag, degThrHed).
 }

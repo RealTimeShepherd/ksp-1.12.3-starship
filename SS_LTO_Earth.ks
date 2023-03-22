@@ -537,7 +537,6 @@ until SHIP:orbit:eta:apoapsis < 4 {
 }
 
 // Stage: CIRCULARISING
-for ptRaptorSL in arrRaptorSL_sle { ptRaptorSL:activate. }
 for ptRaptorVac in arrRaptorVac_sle { ptRaptorVac:activate. }
 lock throttle to 1.
 rcs on.
@@ -547,7 +546,6 @@ until (SHIP:orbit:apoapsis + SHIP:orbit:periapsis) > (mAPTrg + SHIP:altitude) {
 }
 
 // Stage: ORBIT ATTAINED
-for ptRaptorSL in arrRaptorSL_sle { ptRaptorSL:shutdown. }
 for ptRaptorVac in arrRaptorVac_sle { ptRaptorVac:shutdown. }
 lock throttle to 0.
 rcs off.

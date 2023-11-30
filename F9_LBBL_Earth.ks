@@ -51,6 +51,9 @@ global pidYaw is pidLoop(0.5, 0.001, 0.001, -10, 10).
 set pidYaw:setpoint to 0.
 
 global mPETrg is 200000. // Altitude of target perigee
+global kmVesDst is 1175. // Distance of target vessel to trigger launch
+global kmIncDst is 0. // Number of additional Km to add per degree of inclination delta (Original 60)
+global degMaxInc is 20. // Maximum inclination delta to trigger launch
 
 //---------------------------------------------------------------------------------------------------------------------
 // #endregion
@@ -306,14 +309,24 @@ write_console_fle().
 if SHIP:status = "PRELAUNCH" {
 
 	// Stage: PRE-LAUNCH
+	lock degTrgInc to 0.
 	if target_is_body(launchTrg) {
 		lock degTrgInc to abs(SHIP:orbit:lan - target:orbit:lan).
 		set target to launchTrg.
 		until degTrgInc < 0.3 {
 			write_screen_fle("Pre-launch: - " + round(degTrgInc, 4), false).
 		}
-	} else {
-		lock degTrgInc to 0.
+	}
+	if target_is_vessel(launchTrg) { // Launch to circularise as close to target vessel as possible
+		lock degTrgInc to abs(SHIP:orbit:lan - target:orbit:lan).
+		set target to launchTrg.
+		until (target:distance / 1000) < (kmVesDst + (kmIncDst * degTrgInc)) and degTrgInc < degMaxInc {
+			if (degTrgInc < degMaxInc) {
+				write_screen_fle("D0: " + round(((target:distance / 1000) - (kmVesDst + (kmIncDst * degTrgInc))), 0) + " | I: " + round(degTrgInc, 2), false).
+			} else {
+				write_screen_fle("Max Inc: " + degMaxInc + " | I: " + round(degTrgInc, 2), false).
+			}
+		}
 	}
 
 	// Stage: IGNITION

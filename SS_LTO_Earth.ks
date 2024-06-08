@@ -35,6 +35,7 @@ global log_sle is "Telemetry/ss_lto_earth_log.csv".
 global arrSSFlaps_sle is list().
 global arrRaptorVac_sle is list().
 global arrRaptorSL_sle is list().
+global arrRSL_actuate_sle is list().
 global arrSolarPanels_sle is list().
 global arrSPModules_sle is list().
 
@@ -158,6 +159,11 @@ if defined ptFlapAL {
 if defined ptFlapAR {
 	set mdFlapARCS to ptFlapAR:getmodule("ModuleSEPControlSurface").
 	arrSSFlaps_sle:add(mdFlapARCS).
+}
+
+// Bind to actuator modules in Raptor sea level engines
+for ptRaptorSL in arrRaptorSL_sle {
+	arrRSL_actuate_sle:add(ptRaptorSL:getmodule("ModuleSEPRaptor")).
 }
 
 // Bind to modules within solar panels
@@ -401,6 +407,14 @@ if defined rsBDCH4 { set rsBDCH4:enabled to true. }
 // Kill throttle
 lock throttle to 0.
 
+// Actuate out sea level raptors
+for ptRaptorSL in arrRaptorSL_sle { ptRaptorSL:activate. }
+wait 1.
+for mdRSL_actuate in arrRSL_actuate_sle {
+	mdRSL_actuate:setfield("actuate out", true).
+}
+wait 1.
+
 // Shut down sea level Raptors
 for ptRaptorSL in arrRaptorSL_sle { ptRaptorSL:shutdown. }
 
@@ -475,14 +489,21 @@ if SHIP:status = "PRELAUNCH" {
 		}
 	}
 
-	// Stage: STAGE
-	for ptRaptorSL in arrRaptorSL_sle { ptRaptorSL:activate. }
-	for ptRaptorVac in arrRaptorVac_sle { ptRaptorVac:activate. }
+	// Stage: HOT STAGE
 	lock throttle to 1.
-	local timeStage is time:seconds + 4.
-
+	for ptRaptorVac in arrRaptorVac_sle { ptRaptorVac:activate. }
+	local timeStage is time:seconds + 1.
 	until time:seconds > timeStage {
-		write_screen_sle("Stage", true).
+		write_screen_sle("Hot stage", true).
+	}
+	for ptRaptorSL in arrRaptorSL_sle { ptRaptorSL:activate. }
+	set timeStage to time:seconds + 4.
+	until time:seconds > timeStage {
+		write_screen_sle("Hot stage", true).
+	}
+	// Actuate in sea level raptors
+	for mdRSL_actuate in arrRSL_actuate_sle {
+		mdRSL_actuate:setfield("actuate out", false).
 	}
 
 	// Stage: ASCENT

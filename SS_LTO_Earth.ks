@@ -82,24 +82,34 @@ global onBooster is true.
 for pt in SHIP:parts {
 	if pt:name:startswith("SEP.S20.HEADER") { set ptSSHeader to pt. }
 	if pt:name:startswith("SEP.22.SHIP.HEADER") { set ptSSHeader to pt. }
+	if pt:name:startswith("SEP.23.SHIP.HEADER") { set ptSSHeader to pt. }
 	if pt:name:startswith("SEP.S20.CREW") { set ptSSCommand to pt. }
 	if pt:name:startswith("SEP.22.SHIP.CREW") { set ptSSCommand to pt. }
+	if pt:name:startswith("SEP.23.SHIP.CREW") { set ptSSCommand to pt. }
 	if pt:name:startswith("SEP.S20.TANKER") { set ptSSCommand to pt. }
 	if pt:name:startswith("SEP.22.SHIP.TANKER") { set ptSSCommand to pt. }
+	if pt:name:startswith("SEP.23.SHIP.TANKER") { set ptSSCommand to pt. }
 	if pt:name:startswith("SEP.S20.BODY") { set ptSSBody to pt. }
 	if pt:name:startswith("SEP.22.SHIP.BODY") { set ptSSBody to pt. }
+	if pt:name:startswith("SEP.23.SHIP.BODY") { set ptSSBody to pt. }
 	if pt:name:startswith("SEP.S20.FWD.LEFT") { set ptFlapFL to pt. }
 	if pt:name:startswith("SEP.22.SHIP.FWD.LEFT") { set ptFlapFL to pt. }
+	if pt:name:startswith("SEP.23.SHIP.FWD.LEFT") { set ptFlapFL to pt. }
 	if pt:name:startswith("SEP.S20.FWD.RIGHT") { set ptFlapFR to pt. }
 	if pt:name:startswith("SEP.22.SHIP.FWD.RIGHT") { set ptFlapFR to pt. }
+	if pt:name:startswith("SEP.23.SHIP.FWD.RIGHT") { set ptFlapFR to pt. }
 	if pt:name:startswith("SEP.S20.AFT.LEFT") { set ptFlapAL to pt. }
 	if pt:name:startswith("SEP.22.SHIP.AFT.LEFT") { set ptFlapAL to pt. }
+	if pt:name:startswith("SEP.23.SHIP.AFT.LEFT") { set ptFlapAL to pt. }
 	if pt:name:startswith("SEP.S20.AFT.RIGHT") { set ptFlapAR to pt. }
 	if pt:name:startswith("SEP.22.SHIP.AFT.RIGHT") { set ptFlapAR to pt. }
+	if pt:name:startswith("SEP.23.SHIP.AFT.RIGHT") { set ptFlapAR to pt. }
 	if pt:name:startswith("SEP.RAPTOR.VAC") { arrRaptorVac_sle:add(pt). }
 	if pt:name:startswith("SEP.22.RAPTOR.VAC") { arrRaptorVac_sle:add(pt). }
+	if pt:name:startswith("SEP.23.RAPTOR.VAC") { arrRaptorVac_sle:add(pt). }
 	if pt:name:startswith("SEP.RAPTOR.SL") { arrRaptorSL_sle:add(pt). }
 	if pt:name:startswith("SEP.22.RAPTOR2.SL.RC") { arrRaptorSL_sle:add(pt). }
+	if pt:name:startswith("SEP.23.RAPTOR2.SL.RC") { arrRaptorSL_sle:add(pt). }
 	if pt:name:startswith("nfs-panel-deploying-blanket-arm-1") { arrSolarPanels_sle:add(pt). }
 }
 
@@ -461,6 +471,7 @@ if SHIP:status = "PRELAUNCH" {
 		for pt in SHIP:parts {
 			if pt:name:startswith("SEP.B4.INTER") { set onBooster to true. }
 			if pt:name:startswith("SEP.22.BOOSTER.INTER") { set onBooster to true. }
+			if pt:name:startswith("SEP.23.BOOSTER.INTEGRATED") { set onBooster to true. }
 		}
 	}
 

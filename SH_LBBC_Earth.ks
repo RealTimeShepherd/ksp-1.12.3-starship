@@ -83,8 +83,10 @@ for pt in SHIP:parts {
 	if pt:name:startswith("SEP.22.BOOSTER.INTER") { set ptBInter to pt. }
 	if pt:name:startswith("SEP.B4.CORE") { set ptBCore to pt. }
 	if pt:name:startswith("SEP.22.BOOSTER.CORE") { set ptBCore to pt. }
+	if pt:name:startswith("SEP.23.BOOSTER.INTEGRATED") { set ptBIntegrated to pt. }
 	if pt:name:startswith("SEP.B4.33.CLUSTER") { set ptEngClus to pt. }
-	if pt:name:startswith("SEP.22.BOOSTER.CLUSTER") { set ptEngClus to pt. }
+	if pt:name:startswith("SEP.22.BOOSTER.CLUSTER") { set ptEngClus22 to pt. }
+	if pt:name:startswith("SEP.23.BOOSTER.CLUSTER") { set ptEngClus23 to pt. }
 	if pt:name:startswith("KI.SS.Quickdisconect") { set ptQDSH to pt. }
 	if pt:name:startswith("KI.SS.Shiparm") { set ptQDSS to pt. }
 	if pt:name:startswith("SLE.SS.OLP") { set ptOLP to pt. }
@@ -120,11 +122,27 @@ if defined ptBCore {
 	}
 }
 
+// Bind to resources within SuperHeavy Booster Integrated
+if defined ptBIntegrated {
+	set mdDecouple to ptBIntegrated:getmodule("ModuleDecouple").
+	set mdCoreRCS to ptBIntegrated:getmodule("ModuleRCSFX").
+	// Bind to main tanks
+	for rsc in ptBIntegrated:resources {
+		if rsc:name = "LqdOxygen" { set rsCoreLOX to rsc. }
+		if rsc:name = "LqdMethane" { set rsCoreCH4 to rsc. }
+	}
+}
+
 // Bind to modules within Engine Cluster
-if defined ptEngClus {
-	set mdAllEngs to ptEngClus:getmodulebyindex(1).
-	set mdMidEngs to ptEngClus:getmodulebyindex(2).
-	set mdCntEngs to ptEngClus:getmodulebyindex(3).
+if defined ptEngClus22 {
+	set mdAllEngs to ptEngClus22:getmodulebyindex(1).
+	set mdMidEngs to ptEngClus22:getmodulebyindex(2).
+	set mdCntEngs to ptEngClus22:getmodulebyindex(3).
+}
+if defined ptEngClus23 {
+	set mdAllEngs to ptEngClus23:getmodulebyindex(2).
+	set mdMidEngs to ptEngClus23:getmodulebyindex(3).
+	set mdCntEngs to ptEngClus23:getmodulebyindex(4).
 }
 
 // Bind to Quick Disconnect module within the QD arm
@@ -245,7 +263,7 @@ function write_screen_ble { // Write dynamic display elements and write telemetr
 	print round(degAOAPro, 2) + "    " at (14, 13).
 	print round(degProDes, 2) + "    " at (14, 14).
 	// print "----------------------------".
-	print round(pctProp, 0) + "    " at (14, 16).
+	print round(pctProp, 2) + "    " at (14, 16).
 	print round(throttle * 100, 2) + "    " at (14, 17).
 	print round(mpsVrtTrg, 0) + "    " at (14, 18).
 
@@ -350,6 +368,8 @@ for mdGridFin in arrGridFins {
 }
 
 // Enable all engine group, disable others
+//mdAllEngs:doaction("activate engine", true).
+wait 0.1.
 mdAllEngs:doaction("activate engine", true).
 wait 0.1.
 mdMidEngs:doaction("activate engine", true).
@@ -393,8 +413,12 @@ if SHIP:status = "PRELAUNCH" {
 
 	// Stage: IGNITION
 	lock throttle to 1.
-	if mdQDSH:hasevent("Open") { mdQDSH:doevent("Open"). }
-	if mdQDSS:hasevent("Open") { mdQDSS:doevent("Open"). }
+	if defined mdQDSH {
+		if mdQDSH:hasevent("Open") { mdQDSH:doevent("Open"). }
+	}
+	if defined mdQDSS {
+		if mdQDSS:hasevent("Open") { mdQDSS:doevent("Open"). }
+	}
 
 	until mdAllEngs:getfield("thrust") > kNThrLaunch {
 		write_screen_ble("Ignition", false).
@@ -402,7 +426,12 @@ if SHIP:status = "PRELAUNCH" {
 
 	// Stage: LIFT OFF
 	lock steering to up.
-	mdOLPClamp:doaction("Release clamp", true).
+	if defined mdOLPClamp {
+		mdOLPClamp:doaction("Release clamp", true).
+	}
+
+	// Record tower position to return to
+	set pad to geoPosition.
 
 	until SHIP:altitude > mGravTurn {
 		write_screen_ble("Lift off", true).
@@ -417,20 +446,18 @@ if SHIP:status = "PRELAUNCH" {
 		set degYawTrg to pidYaw:update(time:seconds, degTrgInc).
 	}
 
-	// Stage: STAGE
-	lock throttle to 0.
+	// Stage: HOT STAGE
+	// lock throttle to 0. // Hot staging - keep throttle on
 	mdAllEngs:doaction("shutdown engine", true).
-	wait 0.1.
+	wait 1.
 	mdMidEngs:doaction("shutdown engine", true).
-	wait 0.1.
-	mdCntEngs:doaction("shutdown engine", true).
-	wait 0.1.
+	wait 1.
 	mdDecouple:doevent("decouple").
 	unlock degTrgInc.
 
 	local timeStage is time:seconds + 4.
 	until time:seconds > timeStage {
-		write_screen_ble("Stage", true).
+		write_screen_ble("Hot stage", true).
 	}
 
 	// Stage: BEGIN FLIP
@@ -440,31 +467,21 @@ if SHIP:status = "PRELAUNCH" {
 		mdGridFin:setfield("roll", false).
 	}
 	rcs on.
-	set SHIP:control:pitch to 1. // Begin pitch over
+	local headBB is heading_of_vector(srfRetrograde:vector).
+	lock steering to lookdirup(heading(headBB, 0):vector, heading(0, -90):vector). // Aim at horizon in direction of retrograde
 
 	until mdCntEngs:getfield("propellant") = "Very Stable (100.00 %)" {
 		write_screen_ble("Begin flip", true).
 	}
 
 	// Stage: FLIP
-	set SHIP:control:pitch to 0.
-	rcs off.
-	local headBB is heading_of_vector(srfRetrograde:vector).
-
 	until vAng(SHIP:facing:vector, heading(headBB, 0):vector) < 30 {
 		write_screen_ble("Flip", true).
 	}
 
 	// Stage: BOOSTBACK
-	mdAllEngs:doaction("shutdown engine", true).
-	wait 0.1.
 	mdMidEngs:doaction("activate engine", true).
-	wait 0.1.
-	mdCntEngs:doaction("activate engine", true).
-	wait 0.1.
-	lock throttle to 1.
-	rcs on.
-	lock steering to lookdirup(heading(headBB, 0):vector, heading(0, -90):vector). // Aim at horizon in direction of retrograde
+	// lock throttle to 1. - Hot staging keeps throttle on
 
 	until abs(degBerPad) < 20 {
 		write_screen_ble("Boostback", true).

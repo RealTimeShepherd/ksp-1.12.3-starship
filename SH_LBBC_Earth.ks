@@ -143,6 +143,8 @@ if defined ptEngClus23 {
 	set mdAllEngs to ptEngClus23:getmodulebyindex(2).
 	set mdMidEngs to ptEngClus23:getmodulebyindex(3).
 	set mdCntEngs to ptEngClus23:getmodulebyindex(4).
+	set mdMidGimb to ptEngClus23:getmodulebyindex(0).
+	set mdCntGimb to ptEngClus23:getmodulebyindex(9).
 }
 
 // Bind to Quick Disconnect module within the QD arm
@@ -367,14 +369,17 @@ for mdGridFin in arrGridFins {
 	mdGridFin:setfield("deploy", true).
 }
 
-// Enable all engine group, disable others
-//mdAllEngs:doaction("activate engine", true).
+// Enable all engine groups
 wait 0.1.
 mdAllEngs:doaction("activate engine", true).
 wait 0.1.
 mdMidEngs:doaction("activate engine", true).
 wait 0.1.
 mdCntEngs:doaction("activate engine", true).
+
+// Limit gimbals
+mdMidGimb:setfield("gimbal limit", 25).
+mdCntGimb:setfield("gimbal limit", 25).
 
 write_console_ble().
 
@@ -447,10 +452,10 @@ if SHIP:status = "PRELAUNCH" {
 	}
 
 	// Stage: HOT STAGE
-	// lock throttle to 0. // Hot staging - keep throttle on
 	mdAllEngs:doaction("shutdown engine", true).
 	wait 1.
 	mdMidEngs:doaction("shutdown engine", true).
+	mdMidGimb:doaction("lock gimbal", true).
 	wait 1.
 	mdDecouple:doevent("decouple").
 	unlock degTrgInc.
@@ -481,7 +486,7 @@ if SHIP:status = "PRELAUNCH" {
 
 	// Stage: BOOSTBACK
 	mdMidEngs:doaction("activate engine", true).
-	// lock throttle to 1. - Hot staging keeps throttle on
+	mdMidGimb:doaction("free gimbal", true).
 
 	until abs(degBerPad) < 20 {
 		write_screen_ble("Boostback", true).
@@ -490,12 +495,8 @@ if SHIP:status = "PRELAUNCH" {
 
 	// Stage: TARGET PAD
 	lock steering to lookdirup(heading(pad:heading + degBerPad, 0):vector, heading(0, -90):vector).
-	mdAllEngs:doaction("shutdown engine", true).
-	wait 0.1.
 	mdMidEngs:doaction("shutdown engine", true).
-	wait 0.1.
-	mdCntEngs:doaction("activate engine", true).
-	wait 0.1.
+	mdMidGimb:doaction("lock gimbal", true).
 	lock timeFall to sqrt((2 * SHIP:apoapsis) / 9.8).
 	lock mpsVelTrg to (mSrf + mOvrSht) / (eta:apoapsis + timeFall).
 
@@ -506,6 +507,7 @@ if SHIP:status = "PRELAUNCH" {
 
 	// Stage: STABILISE
 	lock throttle to 0.
+	mdCntGimb:doaction("lock gimbal", true).
 	rcs on.
 	lock steering to lookdirup(heading(pad:heading, 0):vector, heading(0, -90):vector).
 	local timeStab is time:seconds + 20.
@@ -562,12 +564,10 @@ until SHIP:altitude < mLdgBrn {
 
 // Stage: LANDING BURN (AERO)
 lock steering to lookdirup(heading(pad:heading + degBerPad, 0):vector, heading(0, -90):vector).
-mdAllEngs:doaction("shutdown engine", true).
-wait 0.1.
 mdMidEngs:doaction("activate engine", true).
-wait 0.1.
+mdMidGimb:doaction("free gimbal", true).
 mdCntEngs:doaction("activate engine", true).
-wait 0.1.
+mdCntGimb:doaction("free gimbal", true).
 lock throttle to 1.
 set mAltTrg to mAltAP1.
 lock degProPad to vAng(srfPrograde:vector, pad:position).

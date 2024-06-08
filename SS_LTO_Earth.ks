@@ -36,6 +36,7 @@ global arrSSFlaps_sle is list().
 global arrRaptorVac_sle is list().
 global arrRaptorSL_sle is list().
 global arrRSL_actuate_sle is list().
+global arrRSL_gimbal_sle is list().
 global arrSolarPanels_sle is list().
 global arrSPModules_sle is list().
 
@@ -161,9 +162,10 @@ if defined ptFlapAR {
 	arrSSFlaps_sle:add(mdFlapARCS).
 }
 
-// Bind to actuator modules in Raptor sea level engines
+// Bind to actuator and gimbal modules in Raptor sea level engines
 for ptRaptorSL in arrRaptorSL_sle {
 	arrRSL_actuate_sle:add(ptRaptorSL:getmodule("ModuleSEPRaptor")).
+	arrRSL_gimbal_sle:add(ptRaptorSL:getmodule("ModuleGimbal")).
 }
 
 // Bind to modules within solar panels
@@ -415,6 +417,11 @@ for mdRSL_actuate in arrRSL_actuate_sle {
 }
 wait 1.
 
+// Lock gimbal on sea level Raptors
+for mdRSL_gimbal in arrRSL_gimbal_sle {
+	mdRSL_gimbal:doaction("lock gimbal", true).
+}
+
 // Shut down sea level Raptors
 for ptRaptorSL in arrRaptorSL_sle { ptRaptorSL:shutdown. }
 
@@ -504,6 +511,14 @@ if SHIP:status = "PRELAUNCH" {
 	// Actuate in sea level raptors
 	for mdRSL_actuate in arrRSL_actuate_sle {
 		mdRSL_actuate:setfield("actuate out", false).
+	}
+	set timeStage to time:seconds + 2.
+	until time:seconds > timeStage {
+		write_screen_sle("Hot stage", true).
+	}
+	// Free gimbal on sea level Raptors
+	for mdRSL_gimbal in arrRSL_gimbal_sle {
+		mdRSL_gimbal:doaction("free gimbal", true).
 	}
 
 	// Stage: ASCENT

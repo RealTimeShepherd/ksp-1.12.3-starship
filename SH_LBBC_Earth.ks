@@ -199,6 +199,8 @@ lock degProDes to 0.
 lock degVecTrg to 0.
 lock mpsVrtTrg to 0.
 
+lock degBBVang to 0.
+
 //---------------------------------------------------------------------------------------------------------------------
 // #endregion
 //---------------------------------------------------------------------------------------------------------------------
@@ -226,6 +228,9 @@ function write_console_ble { // Write unchanging display elements and header lin
 	print "Propellant:                %" at (0, 16).
 	print "Throttle:                  %" at (0, 17).
 	print "Target VSpd:             mps" at (0, 18).
+	print "----------------------------" at (0, 19).
+	print "Angluar vel:             rps" at (0, 20).
+	print "Boost back angle:        deg" at (0, 21).
 
 	deletePath(log_ble).
 	local logline is "MET,".
@@ -268,6 +273,9 @@ function write_screen_ble { // Write dynamic display elements and write telemetr
 	print round(pctProp, 2) + "    " at (14, 16).
 	print round(throttle * 100, 2) + "    " at (14, 17).
 	print round(mpsVrtTrg, 0) + "    " at (14, 18).
+	// print "----------------------------".
+	print round(SHIP:angularvel:mag, 2) + "    " at (14, 20).
+	print round(degBBVang, 2) + "    " at (14, 21).
 
 	if writelog = true {
 		local logline is round(missionTime, 1) + ",".
@@ -474,17 +482,24 @@ if SHIP:status = "PRELAUNCH" {
 	rcs on.
 	local headBB is heading_of_vector(srfRetrograde:vector).
 	lock steering to lookdirup(heading(headBB, 0):vector, heading(0, -90):vector). // Aim at horizon in direction of retrograde
+	lock degBBVang to vAng(vxcl(SHIP:facing:vector, up:vector), vxcl(heading(headBB, 0):vector, up:vector)).
+
+	until SHIP:angularvel:mag > 0.1 {
+		write_screen_ble("Begin flip", true).
+	}
+	unlock steering.
 
 	until mdCntEngs:getfield("propellant") = "Very Stable (100.00 %)" {
 		write_screen_ble("Begin flip", true).
 	}
 
 	// Stage: FLIP
-	until vAng(SHIP:facing:vector, heading(headBB, 0):vector) < 30 {
+	until degBBVang < 5 {
 		write_screen_ble("Flip", true).
 	}
 
 	// Stage: BOOSTBACK
+	lock steering to lookdirup(heading(headBB, 0):vector, heading(0, -90):vector). // Aim at horizon in direction of retrograde
 	mdMidEngs:doaction("activate engine", true).
 	mdMidGimb:doaction("free gimbal", true).
 

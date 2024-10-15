@@ -94,6 +94,7 @@ for pt in SHIP:parts {
 	if pt:name:startswith("SEP.S20.BODY") { set ptSSBody to pt. }
 	if pt:name:startswith("SEP.22.SHIP.BODY") { set ptSSBody to pt. }
 	if pt:name:startswith("SEP.23.SHIP.BODY") { set ptSSBody to pt. }
+	if pt:name:startswith("SEP.23.SHIP.DEPOT") { set ptSSDepot to pt. }
 	if pt:name:startswith("SEP.S20.FWD.LEFT") { set ptFlapFL to pt. }
 	if pt:name:startswith("SEP.22.SHIP.FWD.LEFT") { set ptFlapFL to pt. }
 	if pt:name:startswith("SEP.23.SHIP.FWD.LEFT") { set ptFlapFL to pt. }
@@ -113,6 +114,17 @@ for pt in SHIP:parts {
 	if pt:name:startswith("SEP.22.RAPTOR2.SL.RC") { arrRaptorSL_sle:add(pt). }
 	if pt:name:startswith("SEP.23.RAPTOR2.SL.RC") { arrRaptorSL_sle:add(pt). }
 	if pt:name:startswith("nfs-panel-deploying-blanket-arm-1") { arrSolarPanels_sle:add(pt). }
+}
+
+// Bind to resources within StarShip Depot
+if defined ptSSDepot {
+	set mdSSCMRCS to ptSSDepot:getmodule("ModuleRCSFX").
+	set mdSSBDRCS to ptSSDepot:getmodule("ModuleRCSFX").
+	// Bind to header tanks
+	for rsc in ptSSDepot:resources {
+		if rsc:name = "LqdOxygen" { set rsDPLOX to rsc. }
+		if rsc:name = "LqdMethane" { set rsDPCH4 to rsc. }
+	}
 }
 
 // Bind to resources within StarShip Header
@@ -182,10 +194,14 @@ for ptSolarPanel in arrSolarPanels_sle {
 lock degPitAct to get_pit(prograde).
 lock degYawAct to get_yaw(prograde).
 lock mpsVrtDlt to SHIP:verticalspeed - mpsVrtTrg. // Delta between target vertical speed and actual vertical speed
-if defined rsCMCH4 {
-	lock klProp to rsHDCH4:amount + rsCMCH4:amount + rsBDCH4:amount.
+if defined ptSSDepot {
+	lock klProp to rsDPCH4:amount.
 } else {
-	lock klProp to rsHDCH4:amount + rsBDCH4:amount.
+	if defined rsCMCH4 {
+		lock klProp to rsHDCH4:amount + rsCMCH4:amount + rsBDCH4:amount.
+	} else {
+		lock klProp to rsHDCH4:amount + rsBDCH4:amount.
+	}
 }
 
 //---------------------------------------------------------------------------------------------------------------------
@@ -405,6 +421,8 @@ if defined rsCMLOX { set rsCMLOX:enabled to true. }
 if defined rsCMCH4 { set rsCMCH4:enabled to true. }
 if defined rsBDLOX { set rsBDLOX:enabled to true. }
 if defined rsBDCH4 { set rsBDCH4:enabled to true. }
+if defined rsDPLOX { set rsDPLOX:enabled to true. }
+if defined rsDPCH4 { set rsDPCH4:enabled to true. }
 
 // Kill throttle
 lock throttle to 0.

@@ -66,7 +66,8 @@ global degPitTrg is 10.
 global degYawTrg is 0.
 
 // PID controller
-global pidYaw is pidLoop(0.5, 0.001, 0.001, -10, 10).
+// global pidYaw is pidLoop(0.5, 0.001, 0.001, -10, 10). // Good for StarShip Tanker
+global pidYaw is pidLoop(1.2, 0.001, 4, -10, 10).
 set pidYaw:setpoint to 0.
 
 global trkStpTim is list(0, 0, 0, 0, 0). // Track time per step
@@ -540,7 +541,8 @@ if SHIP:status = "PRELAUNCH" {
 	}
 
 	// Stage: ASCENT
-	lock steering to lookDirUp(heading(heading_of_vector(prograde:vector) - degYawTrg, degPitTrg + vang(prograde:vector, vxcl(up:vector, prograde:vector))):vector, up:vector).
+	//lock steering to lookDirUp(heading(heading_of_vector(prograde:vector) - degYawTrg, degPitTrg + vang(prograde:vector, vxcl(up:vector, prograde:vector))):vector, up:vector).
+	lock steering to lookDirUp(heading(heading_of_vector(prograde:vector) - degTarDlt, degPitTrg + vang(prograde:vector, vxcl(up:vector, prograde:vector))):vector, up:vector).
 	set mpsVrtTrg to calculate_tvspd().
 
 	until sToTrgVel < sToOrbIns {

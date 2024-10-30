@@ -362,8 +362,13 @@ function calculate_pitch { // Adjust pitch by increments depending upon when ver
 			return degPitTrg.
 		}
 	} else { // Ascent
-		if chgInDlt < 0 { // Delta is increasing - do nothing
-			return degPitTrg.
+		if chgInDlt < 0 { // Delta is increasing - do something!!
+			// return degPitTrg.
+			if SHIP:verticalspeed > mpsVrtTrg {
+				return degPitTrg - 0.02.
+			} else {
+				return degPitTrg + 0.02.
+			}
 		} else { // Aim for zero delta at sToOrbIns before orbit
 			set sToZoVrDl to mpsVrtDlt / (chgInDlt / chgInTim).
 			if sToZoVrDl > (sToTrgVel - sToOrbIns) {
